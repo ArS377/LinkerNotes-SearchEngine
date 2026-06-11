@@ -19,6 +19,8 @@
         <span>LINER NOTES</span>
       </a>
       <nav aria-label="Primary navigation">
+        <a href="/browse">Browse</a>
+        <a href="/saved">Saved <span class="saved-count" data-saved-count>0</span></a>
         <a href="/about">About</a>
         <button class="audio-trigger" type="button" data-audio-trigger>
           <span class="audio-icon" aria-hidden="true"></span>
@@ -68,6 +70,10 @@
             <span>Pop</span><span>Electronic</span>
           </div>
         </div>
+
+        <section class="home-discovery" data-home-discovery aria-label="Music discovery">
+          <div class="loading-state">Loading featured music…</div>
+        </section>
       </section>
 
       <section class="results-view" data-view="results" hidden>
@@ -104,6 +110,24 @@
         <div data-song-content></div>
       </article>
 
+      <section class="collection-view" data-view="collection" hidden>
+        <div class="compact-search-wrap">
+          <form class="compact-search" data-search-form role="search">
+            <label class="sr-only" for="collection-query">Search music</label>
+            <input
+              id="collection-query"
+              name="q"
+              type="search"
+              autocomplete="off"
+              placeholder="Search the catalog"
+              data-search-input
+            >
+            <button type="submit" aria-label="Search">↗</button>
+          </form>
+        </div>
+        <div data-collection-content></div>
+      </section>
+
       <section class="about-view" data-view="about" hidden>
         <p class="eyebrow">About the project</p>
         <h1>Music deserves better than scattered tabs.</h1>
@@ -134,6 +158,8 @@
         <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
       </div>
     </dialog>
+
+    <div class="toast" data-toast role="status" aria-live="polite"></div>
 
     <footer>
       <p>Built for curious listeners.</p>

@@ -5,7 +5,13 @@ const resultsTitle = document.querySelector("[data-results-title]");
 const resultsSummary = document.querySelector("[data-results-summary]");
 const resultsList = document.querySelector("[data-results-list]");
 const songContent = document.querySelector("[data-song-content]");
+const collectionContent = document.querySelector("[data-collection-content]");
+const homeDiscovery = document.querySelector("[data-home-discovery]");
 const audioDialog = document.querySelector("[data-audio-dialog]");
+const toast = document.querySelector("[data-toast]");
+const savedCount = document.querySelector("[data-saved-count]");
+const savedKey = "liner-notes-saved";
+let currentSong = null;
 
 function showView(name) {
   for (const view of views) {
@@ -43,14 +49,50 @@ function route(path, { replace = false } = {}) {
   renderRoute();
 }
 
-function renderResult(result) {
+function getSavedSlugs() {
+  try {
+    const value = JSON.parse(localStorage.getItem(savedKey) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function updateSavedCount() {
+  savedCount.textContent = String(getSavedSlugs().length);
+}
+
+function isSaved(slug) {
+  return getSavedSlugs().includes(slug);
+}
+
+function toggleSaved(slug) {
+  const saved = new Set(getSavedSlugs());
+  const willSave = !saved.has(slug);
+  if (willSave) saved.add(slug);
+  else saved.delete(slug);
+  localStorage.setItem(savedKey, JSON.stringify([...saved]));
+  updateSavedCount();
+  return willSave;
+}
+
+function showToast(message) {
+  toast.textContent = message;
+  toast.classList.add("is-visible");
+  window.clearTimeout(showToast.timeout);
+  showToast.timeout = window.setTimeout(() => {
+    toast.classList.remove("is-visible");
+  }, 2200);
+}
+
+function renderResult(result, { showMatch = true } = {}) {
   const title = escapeHtml(result.title);
   const artist = escapeHtml(result.artist);
   return `
     <a class="result-card" href="/songs/${encodeURIComponent(result.slug)}">
       <span class="result-art" style="--art-color: ${escapeHtml(result.color)}" aria-hidden="true"></span>
       <span>
-        <span class="match-badge">${escapeHtml(result.matchReason)}</span>
+        ${showMatch && result.matchReason ? `<span class="match-badge">${escapeHtml(result.matchReason)}</span>` : ""}
         <span class="result-title">${title}</span>
         <span class="result-meta">${artist} · ${escapeHtml(result.album)}</span>
       </span>
@@ -58,6 +100,62 @@ function renderResult(result) {
       <span class="result-arrow" aria-hidden="true">↗</span>
     </a>
   `;
+}
+
+function renderRecordingGrid(recordings) {
+  return `
+    <div class="recording-grid">
+      ${recordings
+        .map(
+          (recording) => `
+            <a class="recording-tile" href="/songs/${encodeURIComponent(recording.slug)}">
+              <span
+                class="recording-tile-art"
+                style="--art-color: ${escapeHtml(recording.color)}"
+                aria-hidden="true"
+              ></span>
+              <span class="recording-tile-title">${escapeHtml(recording.title)}</span>
+              <span class="recording-tile-meta">${escapeHtml(recording.artist)} · ${recording.releaseDate.slice(0, 4)}</span>
+            </a>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+async function loadDiscover() {
+  if (homeDiscovery.dataset.loaded === "true") return;
+  try {
+    const response = await fetch("/api/discover");
+    if (!response.ok) throw new Error("Discover request failed");
+    const body = await response.json();
+    homeDiscovery.dataset.loaded = "true";
+    homeDiscovery.innerHTML = `
+      <div class="discovery-heading">
+        <div>
+          <p class="eyebrow">Start somewhere good</p>
+          <h2>Featured recordings</h2>
+        </div>
+        <a class="text-link" href="/browse">Browse all genres <span aria-hidden="true">↗</span></a>
+      </div>
+      ${renderRecordingGrid(body.featured.slice(0, 4))}
+      <div class="genre-cloud">
+        ${body.genres
+          .map(
+            (genre) => `
+              <a href="/genres/${encodeURIComponent(genre.slug)}" style="--genre-color: ${escapeHtml(genre.color)}">
+                <span>${escapeHtml(genre.name)}</span>
+                <small>${genre.count} ${genre.count === 1 ? "recording" : "recordings"}</small>
+              </a>
+            `
+          )
+          .join("")}
+      </div>
+    `;
+  } catch {
+    homeDiscovery.innerHTML = "";
+  }
 }
 
 async function renderSearch(query) {
@@ -162,7 +260,9 @@ function renderSongMarkup(song) {
       <div>
         <p class="song-kicker">${escapeHtml(song.version)}</p>
         <h1>${escapeHtml(song.title)}</h1>
-        <p class="song-artist">${escapeHtml(song.artist.name)}</p>
+        <p class="song-artist">
+          <a href="/artists/${encodeURIComponent(song.artist.slug)}">${escapeHtml(song.artist.name)} ↗</a>
+        </p>
         <div class="song-facts">
           <span>${formatDate(song.releaseDate)}</span>
           <span>${escapeHtml(song.album)}</span>
@@ -173,6 +273,10 @@ function renderSongMarkup(song) {
           <a class="primary-action" href="${escapeHtml(song.spotifyUrl)}" target="_blank" rel="noreferrer">
             Find on Spotify ↗
           </a>
+          <button class="secondary-action" type="button" data-save-song="${escapeHtml(song.slug)}">
+            ${isSaved(song.slug) ? "Saved ✓" : "Save song"}
+          </button>
+          <button class="secondary-action" type="button" data-share-song>Share</button>
           <button class="secondary-action" type="button" data-audio-trigger>Identify from audio</button>
         </div>
       </div>
@@ -235,6 +339,7 @@ async function renderSong(slug) {
     const response = await fetch(`/api/songs/${encodeURIComponent(slug)}`);
     if (!response.ok) throw new Error("Song request failed");
     const song = await response.json();
+    currentSong = song;
     document.title = `${song.title} by ${song.artist.name} - Liner Notes`;
     songContent.innerHTML = renderSongMarkup(song);
   } catch {
@@ -247,8 +352,148 @@ async function renderSong(slug) {
   }
 }
 
+async function renderArtist(slug) {
+  showView("collection");
+  collectionContent.innerHTML = '<div class="loading-state collection-shell">Loading artist…</div>';
+  try {
+    const response = await fetch(`/api/artists/${encodeURIComponent(slug)}`);
+    if (!response.ok) throw new Error("Artist request failed");
+    const artist = await response.json();
+    document.title = `${artist.name} - Liner Notes`;
+    collectionContent.innerHTML = `
+      <header class="collection-hero">
+        <p class="eyebrow">Artist</p>
+        <h1>${escapeHtml(artist.name)}</h1>
+        <p class="collection-summary">${escapeHtml(artist.summary)}</p>
+        <div class="collection-meta">
+          <span>${escapeHtml(artist.country)}</span>
+          <span>${artist.recordings.length} ${artist.recordings.length === 1 ? "recording" : "recordings"}</span>
+          <span>${artist.genres.map(escapeHtml).join(" · ")}</span>
+        </div>
+      </header>
+      <section class="collection-list">
+        <span class="section-number">DISCOGRAPHY</span>
+        ${artist.recordings.map((recording) => renderResult(recording, { showMatch: false })).join("")}
+      </section>
+    `;
+  } catch {
+    renderCollectionError("That artist is not in the catalog.");
+  }
+}
+
+async function renderGenre(slug) {
+  showView("collection");
+  collectionContent.innerHTML = '<div class="loading-state collection-shell">Opening genre…</div>';
+  try {
+    const response = await fetch(`/api/genres/${encodeURIComponent(slug)}`);
+    if (!response.ok) throw new Error("Genre request failed");
+    const genre = await response.json();
+    document.title = `${genre.name} music - Liner Notes`;
+    collectionContent.innerHTML = `
+      <header class="collection-hero genre-hero" style="--genre-color: ${escapeHtml(genre.color)}">
+        <p class="eyebrow">Browse by genre</p>
+        <h1>${escapeHtml(genre.name)}</h1>
+        <p class="collection-summary">
+          ${genre.count} ${genre.count === 1 ? "recording" : "recordings"} in the catalog.
+        </p>
+      </header>
+      <section class="collection-list">
+        ${genre.recordings.map((recording) => renderResult(recording, { showMatch: false })).join("")}
+      </section>
+    `;
+  } catch {
+    renderCollectionError("That genre is not in the catalog.");
+  }
+}
+
+async function renderBrowse() {
+  showView("collection");
+  collectionContent.innerHTML = '<div class="loading-state collection-shell">Loading the catalog…</div>';
+  try {
+    const response = await fetch("/api/discover");
+    if (!response.ok) throw new Error("Discover request failed");
+    const body = await response.json();
+    document.title = "Browse music - Liner Notes";
+    collectionContent.innerHTML = `
+      <header class="collection-hero browse-hero">
+        <p class="eyebrow">Explore the catalog</p>
+        <h1>Follow a sound.</h1>
+        <p class="collection-summary">Browse genres or start with a landmark recording.</p>
+      </header>
+      <section class="browse-content">
+        <div class="genre-cloud genre-cloud-large">
+          ${body.genres
+            .map(
+              (genre) => `
+                <a href="/genres/${encodeURIComponent(genre.slug)}" style="--genre-color: ${escapeHtml(genre.color)}">
+                  <span>${escapeHtml(genre.name)}</span>
+                  <small>${genre.count}</small>
+                </a>
+              `
+            )
+            .join("")}
+        </div>
+        <span class="section-number">FEATURED RECORDINGS</span>
+        ${renderRecordingGrid(body.featured)}
+      </section>
+    `;
+  } catch {
+    renderCollectionError("The catalog could not be loaded.");
+  }
+}
+
+async function renderSaved() {
+  showView("collection");
+  const slugs = getSavedSlugs();
+  document.title = "Saved songs - Liner Notes";
+  if (slugs.length === 0) {
+    collectionContent.innerHTML = `
+      <header class="collection-hero">
+        <p class="eyebrow">Your library</p>
+        <h1>Nothing saved yet.</h1>
+        <p class="collection-summary">Save a song from its page and it will stay here on this device.</p>
+        <a class="text-link" href="/browse">Browse the catalog <span aria-hidden="true">↗</span></a>
+      </header>
+    `;
+    return;
+  }
+
+  collectionContent.innerHTML = '<div class="loading-state collection-shell">Opening your saved songs…</div>';
+  const responses = await Promise.all(
+    slugs.map((slug) => fetch(`/api/songs/${encodeURIComponent(slug)}`))
+  );
+  const songs = (await Promise.all(
+    responses.filter((response) => response.ok).map((response) => response.json())
+  )).map((song) => ({
+    ...song,
+    artist: song.artist.name,
+    artistSlug: song.artist.slug
+  }));
+
+  collectionContent.innerHTML = `
+    <header class="collection-hero">
+      <p class="eyebrow">Your library</p>
+      <h1>Saved songs</h1>
+      <p class="collection-summary">${songs.length} ${songs.length === 1 ? "recording" : "recordings"}, stored on this device.</p>
+    </header>
+    <section class="collection-list">
+      ${songs.map((song) => renderResult(song, { showMatch: false })).join("")}
+    </section>
+  `;
+}
+
+function renderCollectionError(message) {
+  collectionContent.innerHTML = `
+    <div class="error-state collection-shell">
+      <h2>${escapeHtml(message)}</h2>
+      <a class="text-link" href="/browse">Browse music</a>
+    </div>
+  `;
+}
+
 function renderRoute() {
   const url = new URL(window.location.href);
+  currentSong = null;
   if (url.pathname === "/about") {
     document.title = "About - Liner Notes";
     showView("about");
@@ -257,6 +502,26 @@ function renderRoute() {
 
   if (url.pathname.startsWith("/songs/")) {
     renderSong(decodeURIComponent(url.pathname.slice("/songs/".length)));
+    return;
+  }
+
+  if (url.pathname.startsWith("/artists/")) {
+    renderArtist(decodeURIComponent(url.pathname.slice("/artists/".length)));
+    return;
+  }
+
+  if (url.pathname.startsWith("/genres/")) {
+    renderGenre(decodeURIComponent(url.pathname.slice("/genres/".length)));
+    return;
+  }
+
+  if (url.pathname === "/browse") {
+    renderBrowse();
+    return;
+  }
+
+  if (url.pathname === "/saved") {
+    renderSaved();
     return;
   }
 
@@ -269,6 +534,7 @@ function renderRoute() {
   document.title = "Liner Notes - Find the song. Know the story.";
   syncInputs("");
   showView("home");
+  loadDiscover();
 }
 
 for (const form of searchForms) {
@@ -281,6 +547,30 @@ for (const form of searchForms) {
 }
 
 document.addEventListener("click", (event) => {
+  const saveButton = event.target.closest("[data-save-song]");
+  if (saveButton) {
+    const saved = toggleSaved(saveButton.dataset.saveSong);
+    saveButton.textContent = saved ? "Saved ✓" : "Save song";
+    showToast(saved ? "Saved to your library" : "Removed from your library");
+    return;
+  }
+
+  if (event.target.closest("[data-share-song]") && currentSong) {
+    const shareData = {
+      title: `${currentSong.title} by ${currentSong.artist.name}`,
+      text: `Explore ${currentSong.title} on Liner Notes`,
+      url: window.location.href
+    };
+    if (navigator.share) {
+      navigator.share(shareData).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(window.location.href).then(() => {
+        showToast("Link copied");
+      });
+    }
+    return;
+  }
+
   const link = event.target.closest("a");
   if (
     link &&
@@ -313,4 +603,5 @@ audioDialog.addEventListener("click", (event) => {
 });
 
 window.addEventListener("popstate", renderRoute);
+updateSavedCount();
 renderRoute();

@@ -116,6 +116,18 @@ nav a {
   border-bottom: 1px solid transparent;
 }
 
+.saved-count {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 3px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 0.58rem;
+}
+
 nav a:hover {
   border-color: currentColor;
 }
@@ -191,6 +203,128 @@ main {
 .catalog-strip {
   position: relative;
   z-index: 1;
+}
+
+.home-discovery {
+  margin: 80px -8vw -44px;
+  padding: 90px 8vw 100px;
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.discovery-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 30px;
+  margin-bottom: 42px;
+}
+
+.discovery-heading h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(2.8rem, 5vw, 5rem);
+  font-weight: 500;
+  line-height: 0.9;
+  letter-spacing: -0.05em;
+}
+
+.discovery-heading .text-link {
+  margin: 0;
+  border-color: currentColor;
+}
+
+.recording-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(18px, 3vw, 42px);
+}
+
+.recording-tile {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.recording-tile-art {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  margin-bottom: 18px;
+  overflow: hidden;
+  background: var(--art-color);
+  transition: transform 200ms ease;
+}
+
+.recording-tile:hover .recording-tile-art {
+  transform: rotate(-1.5deg) scale(1.015);
+}
+
+.recording-tile-art::before {
+  content: "";
+  position: absolute;
+  inset: 14%;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 18px var(--art-color),
+    inset 0 0 0 19px rgba(255, 255, 255, 0.45);
+}
+
+.recording-tile-art::after {
+  content: "";
+  position: absolute;
+  top: 46%;
+  left: 46%;
+  width: 8%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+.recording-tile-title {
+  overflow: hidden;
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recording-tile-meta {
+  overflow: hidden;
+  margin-top: 4px;
+  color: #aaa99f;
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.genre-cloud {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 80px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.genre-cloud a {
+  display: flex;
+  min-height: 105px;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 18px;
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  text-transform: capitalize;
+}
+
+.genre-cloud a:hover {
+  background: var(--genre-color);
+}
+
+.genre-cloud small {
+  color: #aaa99f;
+  font-size: 0.62rem;
 }
 
 .eyebrow {
@@ -514,6 +648,10 @@ main {
   font-size: clamp(1.1rem, 2vw, 1.5rem);
 }
 
+.song-artist a:hover {
+  color: var(--acid);
+}
+
 .song-facts {
   display: flex;
   flex-wrap: wrap;
@@ -688,6 +826,132 @@ main {
   padding: 100px 8vw 140px;
 }
 
+.collection-shell {
+  padding-left: 8vw;
+  padding-right: 8vw;
+}
+
+.collection-hero {
+  position: relative;
+  padding: 90px 8vw 80px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+}
+
+.collection-hero::after {
+  content: "";
+  position: absolute;
+  right: 8vw;
+  bottom: -12vw;
+  width: 28vw;
+  min-width: 220px;
+  aspect-ratio: 1;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+}
+
+.collection-hero h1 {
+  position: relative;
+  z-index: 1;
+  max-width: 1000px;
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(4.2rem, 10vw, 10rem);
+  font-weight: 500;
+  line-height: 0.8;
+  letter-spacing: -0.065em;
+  text-transform: capitalize;
+}
+
+.collection-summary {
+  position: relative;
+  z-index: 1;
+  max-width: 650px;
+  margin: 40px 0 0;
+  color: var(--muted);
+  font-family: var(--serif);
+  font-size: clamp(1.2rem, 2vw, 1.6rem);
+  line-height: 1.5;
+}
+
+.collection-meta {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 25px;
+  margin-top: 26px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: capitalize;
+}
+
+.genre-hero::after {
+  border: 0;
+  background: var(--genre-color);
+  opacity: 0.85;
+}
+
+.browse-hero {
+  background: var(--acid);
+}
+
+.collection-list,
+.browse-content {
+  padding: 70px 8vw 110px;
+}
+
+.collection-list .result-card:first-of-type {
+  margin-top: 18px;
+}
+
+.genre-cloud-large {
+  margin: 0 0 90px;
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.genre-cloud-large a {
+  min-height: 145px;
+  border-color: var(--line);
+  font-family: var(--serif);
+  font-size: 1.5rem;
+}
+
+.genre-cloud-large small {
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 0.68rem;
+}
+
+.browse-content .recording-grid {
+  margin-top: 24px;
+}
+
+.browse-content .recording-tile-meta {
+  color: var(--muted);
+}
+
+.toast {
+  position: fixed;
+  z-index: 30;
+  right: 24px;
+  bottom: 24px;
+  padding: 13px 18px;
+  background: var(--acid);
+  font-size: 0.75rem;
+  font-weight: 700;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(12px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .about-view h1 {
   max-width: 950px;
   margin: 0 0 80px;
@@ -797,8 +1061,13 @@ footer p {
     padding: 0 22px;
   }
 
-  nav > a {
+  nav > a[href="/about"] {
     display: none;
+  }
+
+  nav {
+    gap: 14px;
+    font-size: 0.68rem;
   }
 
   .audio-trigger {
@@ -836,6 +1105,26 @@ footer p {
   .catalog-strip {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .home-discovery {
+    margin-top: 65px;
+    padding: 70px 24px 80px;
+  }
+
+  .discovery-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .recording-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 38px;
+  }
+
+  .genre-cloud {
+    grid-template-columns: repeat(2, 1fr);
+    margin-top: 60px;
   }
 
   .genre-list {
@@ -898,6 +1187,23 @@ footer p {
 
   .about-view {
     padding: 80px 24px 100px;
+  }
+
+  .collection-hero,
+  .collection-list,
+  .browse-content,
+  .collection-shell {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .collection-hero {
+    padding-top: 70px;
+    padding-bottom: 70px;
+  }
+
+  .genre-cloud-large {
+    margin-top: 0;
   }
 
   .about-grid {

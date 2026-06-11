@@ -9,7 +9,8 @@ import {
   getGenres,
   getRecording
 } from "./catalog.js";
-import { searchRecordings } from "./search.js";
+import { federatedSearch } from "./federated-search.js";
+import { lookupMusicBrainzRecording } from "./providers/musicbrainz.js";
 
 const root = fileURLToPath(new URL("../public", import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -73,9 +74,12 @@ export const server = createServer(async (request, response) => {
 
   if (url.pathname === "/api/search") {
     const query = url.searchParams.get("q") || "";
+    const search = query
+      ? await federatedSearch(query)
+      : { results: [], localCount: 0, globalCount: 0, remoteStatus: "ok" };
     sendJson(response, 200, {
       query,
-      results: searchRecordings(query)
+      ...search
     });
     return;
   }
@@ -118,6 +122,18 @@ export const server = createServer(async (request, response) => {
       return;
     }
     sendJson(response, 200, recording);
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/external-songs/")) {
+    const id = decodeURIComponent(
+      url.pathname.slice("/api/external-songs/".length)
+    );
+    try {
+      sendJson(response, 200, await lookupMusicBrainzRecording(id));
+    } catch {
+      sendJson(response, 502, { error: "Global recording lookup unavailable" });
+    }
     return;
   }
 

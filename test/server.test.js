@@ -1,10 +1,27 @@
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { server } from "../src/server.js";
+import { setMusicBrainzFetchForTests } from "../src/providers/musicbrainz.js";
 
 let baseUrl;
 
 before(async () => {
+  setMusicBrainzFetchForTests(async (url) => {
+    if (String(url).includes("/recording/remote-id")) {
+      return {
+        ok: true,
+        json: async () => ({
+          id: "remote-id",
+          title: "Remote Song",
+          "artist-credit": [
+            { name: "Remote Artist", artist: { id: "remote-artist", name: "Remote Artist" } }
+          ],
+          releases: [{ title: "Remote Album", status: "Official", date: "2024" }]
+        })
+      };
+    }
+    return { ok: true, json: async () => ({ recordings: [] }) };
+  });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   baseUrl = `http://127.0.0.1:${address.port}`;
@@ -27,6 +44,15 @@ test("search endpoint returns explained matches", async () => {
   const body = await response.json();
   assert.equal(body.results[0].slug, "smells-like-teen-spirit-nirvana");
   assert.equal(body.results[0].matchReason, "lyric match");
+  assert.equal(body.remoteStatus, "ok");
+});
+
+test("external song endpoint builds a global catalog page", async () => {
+  const response = await fetch(`${baseUrl}/api/external-songs/remote-id`);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.title, "Remote Song");
+  assert.equal(body.external, true);
 });
 
 test("song endpoint returns canonical artist and related versions", async () => {

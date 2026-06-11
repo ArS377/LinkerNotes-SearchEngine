@@ -112,6 +112,13 @@ test("serves client routes through the application shell", async () => {
   assert.match(body, /Liner Notes/);
 });
 
+test("serves global recording routes through the application shell", async () => {
+  const response = await fetch(`${baseUrl}/songs/mbid-remote-id`);
+  const body = await response.text();
+  assert.equal(response.status, 200);
+  assert.match(body, /Liner Notes/);
+});
+
 test("supports deployment probes for static assets", async () => {
   const response = await fetch(`${baseUrl}/styles.css`, { method: "HEAD" });
   assert.equal(response.status, 200);

@@ -580,6 +580,31 @@ main {
   text-transform: uppercase;
 }
 
+.source-badge {
+  display: inline-block;
+  margin: 0 0 7px 5px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.global-result .result-art {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 8px,
+      rgba(255, 255, 255, 0.12) 8px,
+      rgba(255, 255, 255, 0.12) 16px
+    ),
+    var(--art-color);
+}
+
 .result-arrow {
   font-size: 1.2rem;
 }
@@ -742,6 +767,26 @@ main {
   font-family: var(--serif);
   font-size: clamp(1.4rem, 2.3vw, 2rem);
   line-height: 1.45;
+}
+
+.enrichment-callout {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 24px;
+  max-width: 730px;
+  margin-top: 35px;
+  padding: 22px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+.enrichment-callout strong {
+  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .song-sidebar section {

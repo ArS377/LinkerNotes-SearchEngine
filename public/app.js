@@ -35,6 +35,7 @@ function syncInputs(value) {
 }
 
 function formatDate(value) {
+  if (!value) return "Release date unavailable";
   return new Intl.DateTimeFormat("en-US", {
     year: "numeric",
     month: "long",
@@ -88,15 +89,20 @@ function showToast(message) {
 function renderResult(result, { showMatch = true } = {}) {
   const title = escapeHtml(result.title);
   const artist = escapeHtml(result.artist);
+  const href = `/songs/${encodeURIComponent(result.slug)}`;
+  const releaseYear = result.releaseDate
+    ? String(result.releaseDate).slice(0, 4)
+    : "Date unknown";
   return `
-    <a class="result-card" href="/songs/${encodeURIComponent(result.slug)}">
+    <a class="result-card${result.external ? " global-result" : ""}" href="${href}">
       <span class="result-art" style="--art-color: ${escapeHtml(result.color)}" aria-hidden="true"></span>
       <span>
         ${showMatch && result.matchReason ? `<span class="match-badge">${escapeHtml(result.matchReason)}</span>` : ""}
+        ${result.source ? `<span class="source-badge">${escapeHtml(result.source)}</span>` : ""}
         <span class="result-title">${title}</span>
         <span class="result-meta">${artist} · ${escapeHtml(result.album)}</span>
       </span>
-      <span class="result-version">${escapeHtml(result.version)}<br>${result.releaseDate.slice(0, 4)}</span>
+      <span class="result-version">${escapeHtml(result.version)}<br>${releaseYear}</span>
       <span class="result-arrow" aria-hidden="true">↗</span>
     </a>
   `;
@@ -170,9 +176,12 @@ async function renderSearch(query) {
     const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
     if (!response.ok) throw new Error("Search request failed");
     const body = await response.json();
+    const coverage = body.remoteStatus === "unavailable"
+      ? "Global catalog temporarily unavailable; showing local matches."
+      : `${body.localCount} enriched locally · ${body.globalCount} from MusicBrainz`;
     resultsSummary.textContent = `${body.results.length} ${
       body.results.length === 1 ? "recording" : "recordings"
-    } found`;
+    } found · ${coverage}`;
 
     if (body.results.length === 0) {
       resultsList.innerHTML = `
@@ -258,10 +267,17 @@ function renderSongMarkup(song) {
         aria-label="Abstract artwork for ${escapeHtml(song.title)}"
       ></div>
       <div>
-        <p class="song-kicker">${escapeHtml(song.version)}</p>
+        <p class="song-kicker">
+          ${escapeHtml(song.version)}
+          ${song.external ? " · Global catalog record" : " · Enriched locally"}
+        </p>
         <h1>${escapeHtml(song.title)}</h1>
         <p class="song-artist">
-          <a href="/artists/${encodeURIComponent(song.artist.slug)}">${escapeHtml(song.artist.name)} ↗</a>
+          ${
+            song.artist.slug
+              ? `<a href="/artists/${encodeURIComponent(song.artist.slug)}">${escapeHtml(song.artist.name)} ↗</a>`
+              : escapeHtml(song.artist.name)
+          }
         </p>
         <div class="song-facts">
           <span>${formatDate(song.releaseDate)}</span>
@@ -273,6 +289,11 @@ function renderSongMarkup(song) {
           <a class="primary-action" href="${escapeHtml(song.spotifyUrl)}" target="_blank" rel="noreferrer">
             Find on Spotify ↗
           </a>
+          ${
+            song.musicBrainzUrl
+              ? `<a class="secondary-action" href="${escapeHtml(song.musicBrainzUrl)}" target="_blank" rel="noreferrer">View source ↗</a>`
+              : ""
+          }
           <button class="secondary-action" type="button" data-save-song="${escapeHtml(song.slug)}">
             ${isSaved(song.slug) ? "Saved ✓" : "Save song"}
           </button>
@@ -300,6 +321,14 @@ function renderSongMarkup(song) {
           <span class="section-number">02 / THE STORY</span>
           <h2>Behind the song</h2>
           <p>${escapeHtml(song.story)}</p>
+          ${
+            song.external
+              ? `<div class="enrichment-callout">
+                  <strong>Global result</strong>
+                  <span>This page was assembled on demand from MusicBrainz. Credits, lyrics, chart facts, and editorial context may be incomplete until this recording is added to the enriched local index.</span>
+                </div>`
+              : ""
+          }
         </section>
       </div>
 
@@ -336,7 +365,7 @@ async function renderSong(slug) {
   songContent.innerHTML = '<div class="loading-state compact-search-wrap">Opening the liner notes…</div>';
 
   try {
-    const response = await fetch(`/api/songs/${encodeURIComponent(slug)}`);
+    const response = await fetch(songApiUrl(slug));
     if (!response.ok) throw new Error("Song request failed");
     const song = await response.json();
     currentSong = song;
@@ -350,6 +379,13 @@ async function renderSong(slug) {
       </div>
     `;
   }
+}
+
+function songApiUrl(slug) {
+  if (slug.startsWith("mbid-")) {
+    return `/api/external-songs/${encodeURIComponent(slug.slice("mbid-".length))}`;
+  }
+  return `/api/songs/${encodeURIComponent(slug)}`;
 }
 
 async function renderArtist(slug) {
@@ -460,7 +496,7 @@ async function renderSaved() {
 
   collectionContent.innerHTML = '<div class="loading-state collection-shell">Opening your saved songs…</div>';
   const responses = await Promise.all(
-    slugs.map((slug) => fetch(`/api/songs/${encodeURIComponent(slug)}`))
+    slugs.map((slug) => fetch(songApiUrl(slug)))
   );
   const songs = (await Promise.all(
     responses.filter((response) => response.ok).map((response) => response.json())

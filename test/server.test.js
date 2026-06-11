@@ -2,10 +2,37 @@ import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { server } from "../src/server.js";
 import { setMusicBrainzFetchForTests } from "../src/providers/musicbrainz.js";
+import { setAppleFetchForTests } from "../src/providers/apple.js";
 
 let baseUrl;
 
 before(async () => {
+  setAppleFetchForTests(async (url) => {
+    const isLookup = String(url).includes("/lookup");
+    return {
+      ok: true,
+      json: async () => ({
+        resultCount: 1,
+        results: [
+          {
+            trackId: isLookup ? 99 : 1,
+            artistId: 2,
+            artistName: isLookup ? "Apple Artist" : "Kendrick Lamar",
+            collectionName: isLookup ? "Apple Album" : "To Pimp a Butterfly",
+            trackName: isLookup ? "Apple Song" : "Alright",
+            trackCensoredName: isLookup ? "Apple Song" : "Alright",
+            trackViewUrl: "https://music.apple.com/track",
+            previewUrl: "https://example.com/preview.m4a",
+            artworkUrl100: "https://example.com/100x100bb.jpg",
+            releaseDate: "2024-01-01T00:00:00Z",
+            trackTimeMillis: 180000,
+            primaryGenreName: "Pop",
+            isStreamable: true
+          }
+        ]
+      })
+    };
+  });
   setMusicBrainzFetchForTests(async (url) => {
     if (String(url).includes("/recording/remote-id")) {
       return {
@@ -53,6 +80,25 @@ test("external song endpoint builds a global catalog page", async () => {
   assert.equal(response.status, 200);
   assert.equal(body.title, "Remote Song");
   assert.equal(body.external, true);
+  assert.equal(body.appleMusicUrl, "https://music.apple.com/track");
+  assert.equal(body.previewUrl, "https://example.com/preview.m4a");
+});
+
+test("Apple song endpoint builds a commercial catalog page", async () => {
+  const response = await fetch(`${baseUrl}/api/apple-songs/99`);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.title, "Apple Song");
+  assert.equal(body.appleMusicUrl, "https://music.apple.com/track");
+});
+
+test("local playback endpoint resolves store and preview links", async () => {
+  const response = await fetch(`${baseUrl}/api/playback/alright-kendrick-lamar`);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.appleMusicUrl, "https://music.apple.com/track");
+  assert.equal(body.previewUrl, "https://example.com/preview.m4a");
+  assert.match(body.spotifySearchUrl, /open\.spotify\.com\/search/);
 });
 
 test("song endpoint returns canonical artist and related versions", async () => {
@@ -114,6 +160,13 @@ test("serves client routes through the application shell", async () => {
 
 test("serves global recording routes through the application shell", async () => {
   const response = await fetch(`${baseUrl}/songs/mbid-remote-id`);
+  const body = await response.text();
+  assert.equal(response.status, 200);
+  assert.match(body, /Liner Notes/);
+});
+
+test("serves Apple recording routes through the application shell", async () => {
+  const response = await fetch(`${baseUrl}/songs/apple-99`);
   const body = await response.text();
   assert.equal(response.status, 200);
   assert.match(body, /Liner Notes/);

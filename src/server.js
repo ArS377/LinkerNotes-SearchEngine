@@ -11,6 +11,8 @@ import {
 } from "./catalog.js";
 import { federatedSearch } from "./federated-search.js";
 import { lookupMusicBrainzRecording } from "./providers/musicbrainz.js";
+import { lookupAppleTrack, searchAppleMusic } from "./providers/apple.js";
+import { resolveSpotifyTrack } from "./providers/spotify.js";
 
 const root = fileURLToPath(new URL("../public", import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -130,10 +132,80 @@ export const server = createServer(async (request, response) => {
       url.pathname.slice("/api/external-songs/".length)
     );
     try {
-      sendJson(response, 200, await lookupMusicBrainzRecording(id));
+      const recording = await lookupMusicBrainzRecording(id);
+      const appleResults = await searchAppleMusic(
+        `${recording.title} ${recording.artist.name}`,
+        5
+      ).catch(() => []);
+      const exactApple = appleResults.find(
+        (candidate) =>
+          candidate.title.toLowerCase() === recording.title.toLowerCase()
+          && candidate.artist.toLowerCase() === recording.artist.name.toLowerCase()
+      ) || appleResults[0];
+      if (exactApple) {
+        Object.assign(recording, {
+          appleTrackId: exactApple.appleTrackId,
+          appleMusicUrl: exactApple.appleMusicUrl,
+          previewUrl: exactApple.previewUrl,
+          artworkUrl: exactApple.artworkUrl,
+          isStreamable: exactApple.isStreamable,
+          providers: ["MusicBrainz", "Apple Music"]
+        });
+      }
+      if (!recording.spotifyUrl) {
+        Object.assign(
+          recording,
+          await resolveSpotifyTrack(recording.title, recording.artist.name)
+        );
+      }
+      sendJson(response, 200, recording);
     } catch {
       sendJson(response, 502, { error: "Global recording lookup unavailable" });
     }
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/apple-songs/")) {
+    const id = decodeURIComponent(url.pathname.slice("/api/apple-songs/".length));
+    try {
+      const recording = await lookupAppleTrack(id);
+      Object.assign(
+        recording,
+        await resolveSpotifyTrack(recording.title, recording.artist.name)
+      );
+      sendJson(response, 200, recording);
+    } catch {
+      sendJson(response, 502, { error: "Commercial recording lookup unavailable" });
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/playback/")) {
+    const slug = decodeURIComponent(url.pathname.slice("/api/playback/".length));
+    const recording = getRecording(slug);
+    if (!recording) {
+      sendJson(response, 404, { error: "Song not found" });
+      return;
+    }
+    const appleResults = await searchAppleMusic(
+      `${recording.title} ${recording.artist.name}`,
+      5
+    ).catch(() => []);
+    const exactApple = appleResults.find(
+      (candidate) =>
+        candidate.title.toLowerCase() === recording.title.toLowerCase()
+        && candidate.artist.toLowerCase() === recording.artist.name.toLowerCase()
+    ) || appleResults[0];
+    const spotify = await resolveSpotifyTrack(
+      recording.title,
+      recording.artist.name
+    );
+    sendJson(response, 200, {
+      ...spotify,
+      appleMusicUrl: exactApple?.appleMusicUrl || null,
+      previewUrl: exactApple?.previewUrl || null,
+      artworkUrl: exactApple?.artworkUrl || null
+    });
     return;
   }
 

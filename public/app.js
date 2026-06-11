@@ -95,10 +95,24 @@ function renderResult(result, { showMatch = true } = {}) {
     : "Date unknown";
   return `
     <a class="result-card${result.external ? " global-result" : ""}" href="${href}">
-      <span class="result-art" style="--art-color: ${escapeHtml(result.color)}" aria-hidden="true"></span>
+      <span
+        class="result-art${result.thumbnailUrl || result.artworkUrl ? " has-artwork" : ""}"
+        style="--art-color: ${escapeHtml(result.color)}${
+          result.thumbnailUrl || result.artworkUrl
+            ? `; background-image: url('${escapeHtml(result.thumbnailUrl || result.artworkUrl)}')`
+            : ""
+        }"
+        aria-hidden="true"
+      ></span>
       <span>
         ${showMatch && result.matchReason ? `<span class="match-badge">${escapeHtml(result.matchReason)}</span>` : ""}
-        ${result.source ? `<span class="source-badge">${escapeHtml(result.source)}</span>` : ""}
+        ${
+          result.providers?.length
+            ? result.providers.map((provider) => `<span class="source-badge">${escapeHtml(provider)}</span>`).join("")
+            : result.source
+              ? `<span class="source-badge">${escapeHtml(result.source)}</span>`
+              : ""
+        }
         <span class="result-title">${title}</span>
         <span class="result-meta">${artist} · ${escapeHtml(result.album)}</span>
       </span>
@@ -258,11 +272,15 @@ function renderRelated(related) {
 
 function renderSongMarkup(song) {
   const shadow = `${song.color}99`;
+  const spotifyHref = song.spotifyUrl || song.spotifySearchUrl;
+  const spotifyLabel = song.spotifyUrl ? "Open exact track on Spotify ↗" : "Search on Spotify ↗";
   return `
     <header class="song-hero">
       <div
-        class="song-art"
-        style="--art-color: ${escapeHtml(song.color)}; --art-shadow: ${escapeHtml(shadow)}"
+        class="song-art${song.artworkUrl ? " has-artwork" : ""}"
+        style="--art-color: ${escapeHtml(song.color)}; --art-shadow: ${escapeHtml(shadow)}${
+          song.artworkUrl ? `; background-image: url('${escapeHtml(song.artworkUrl)}')` : ""
+        }"
         role="img"
         aria-label="Abstract artwork for ${escapeHtml(song.title)}"
       ></div>
@@ -286,9 +304,16 @@ function renderSongMarkup(song) {
           <span>${song.genres.map(escapeHtml).join(" · ")}</span>
         </div>
         <div class="song-actions">
-          <a class="primary-action" href="${escapeHtml(song.spotifyUrl)}" target="_blank" rel="noreferrer">
-            Find on Spotify ↗
-          </a>
+          ${
+            spotifyHref
+              ? `<a class="${song.spotifyUrl ? "primary-action" : "secondary-action"}" href="${escapeHtml(spotifyHref)}" target="_blank" rel="noreferrer">${spotifyLabel}</a>`
+              : ""
+          }
+          ${
+            song.appleMusicUrl
+              ? `<a class="primary-action apple-action" href="${escapeHtml(song.appleMusicUrl)}" target="_blank" rel="noreferrer">Open in Apple Music ↗</a>`
+              : ""
+          }
           ${
             song.musicBrainzUrl
               ? `<a class="secondary-action" href="${escapeHtml(song.musicBrainzUrl)}" target="_blank" rel="noreferrer">View source ↗</a>`
@@ -302,6 +327,21 @@ function renderSongMarkup(song) {
         </div>
       </div>
     </header>
+
+    ${
+      song.previewUrl
+        ? `<section class="preview-player">
+            <div>
+              <span class="section-number">LISTEN</span>
+              <strong>Preview this recording</strong>
+              <span>Provided by Apple Music</span>
+            </div>
+            <audio controls preload="none" src="${escapeHtml(song.previewUrl)}">
+              Your browser does not support audio playback.
+            </audio>
+          </section>`
+        : ""
+    }
 
     <div class="song-body">
       <div>
@@ -368,6 +408,14 @@ async function renderSong(slug) {
     const response = await fetch(songApiUrl(slug));
     if (!response.ok) throw new Error("Song request failed");
     const song = await response.json();
+    if (!song.external) {
+      const playbackResponse = await fetch(
+        `/api/playback/${encodeURIComponent(song.slug)}`
+      ).catch(() => null);
+      if (playbackResponse?.ok) {
+        Object.assign(song, await playbackResponse.json());
+      }
+    }
     currentSong = song;
     document.title = `${song.title} by ${song.artist.name} - Liner Notes`;
     songContent.innerHTML = renderSongMarkup(song);
@@ -384,6 +432,9 @@ async function renderSong(slug) {
 function songApiUrl(slug) {
   if (slug.startsWith("mbid-")) {
     return `/api/external-songs/${encodeURIComponent(slug.slice("mbid-".length))}`;
+  }
+  if (slug.startsWith("apple-")) {
+    return `/api/apple-songs/${encodeURIComponent(slug.slice("apple-".length))}`;
   }
   return `/api/songs/${encodeURIComponent(slug)}`;
 }

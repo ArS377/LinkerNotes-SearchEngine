@@ -132,11 +132,15 @@ export async function searchMusicBrainz(query, limit = 12) {
 
 export async function lookupMusicBrainzRecording(id) {
   const recording = await requestMusicBrainz(`recording/${encodeURIComponent(id)}`, {
-    inc: "artist-credits+releases+genres"
+    inc: "artist-credits+releases+genres+url-rels"
   });
   const result = normalizeMusicBrainzResult(recording);
   const artist = primaryArtist(recording["artist-credit"]);
   const release = firstRelease(recording);
+
+  const spotifyUrl = recording.relations
+    ?.map((relation) => relation.url?.resource)
+    .find((url) => /^https:\/\/open\.spotify\.com\/track\//.test(url));
 
   return {
     id: `musicbrainz-${recording.id}`,
@@ -150,7 +154,8 @@ export async function lookupMusicBrainzRecording(id) {
     genres: result.genres,
     version: result.version,
     color: result.color,
-    spotifyUrl: `https://open.spotify.com/search/${encodeURIComponent(
+    spotifyUrl: spotifyUrl || null,
+    spotifySearchUrl: `https://open.spotify.com/search/${encodeURIComponent(
       `${result.title} ${result.artist}`
     )}`,
     musicBrainzUrl: `https://musicbrainz.org/recording/${recording.id}`,

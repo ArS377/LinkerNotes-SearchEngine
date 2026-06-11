@@ -555,6 +555,19 @@ main {
   background: var(--paper);
 }
 
+.result-art.has-artwork,
+.song-art.has-artwork {
+  background-position: center;
+  background-size: cover;
+}
+
+.result-art.has-artwork::before,
+.result-art.has-artwork::after,
+.song-art.has-artwork::before,
+.song-art.has-artwork::after {
+  display: none;
+}
+
 .result-title {
   margin: 0 0 5px;
   font-family: var(--serif);
@@ -708,6 +721,41 @@ main {
   border-color: var(--acid);
   background: var(--acid);
   color: var(--ink);
+}
+
+.apple-action {
+  border-color: var(--paper);
+  background: var(--paper);
+}
+
+.preview-player {
+  display: grid;
+  grid-template-columns: 1fr minmax(280px, 520px);
+  gap: 40px;
+  align-items: center;
+  padding: 30px 8vw;
+  border-bottom: 1px solid var(--line);
+  background: var(--acid);
+}
+
+.preview-player > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.preview-player .section-number {
+  margin: 0 0 5px;
+}
+
+.preview-player span:last-child {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.preview-player audio {
+  width: 100%;
+  height: 42px;
 }
 
 .song-body {
@@ -1212,6 +1260,11 @@ footer p {
   .song-body {
     grid-template-columns: 1fr;
     padding: 70px 24px;
+  }
+
+  .preview-player {
+    grid-template-columns: 1fr;
+    padding: 28px 24px;
   }
 
   .lyrics-unavailable {

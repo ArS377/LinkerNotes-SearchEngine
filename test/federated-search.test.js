@@ -50,3 +50,26 @@ test("keeps local search working during provider outages", async () => {
   assert.equal(result.results[0].slug, "get-lucky-daft-punk");
   assert.equal(result.remoteStatus, "unavailable");
 });
+
+test("reranks an exact title and artist above a high-scoring cover", async () => {
+  const result = await federatedSearch("Once in a Lifetime Talking Heads", {
+    remoteSearch: async () => [
+      {
+        slug: "mbid-cover",
+        title: "Once in a Lifetime [Talking Heads]",
+        artist: "The Smashing Pumpkins",
+        score: 100,
+        external: true
+      },
+      {
+        slug: "mbid-original",
+        title: "Once in a Lifetime",
+        artist: "Talking Heads",
+        score: 33,
+        external: true
+      }
+    ]
+  });
+
+  assert.equal(result.results[0].slug, "mbid-original");
+});

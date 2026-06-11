@@ -27,9 +27,9 @@ test("normalizes MusicBrainz search results", async () => {
   }));
 
   const results = await searchMusicBrainz("Dreams");
-  assert.equal(results[0].slug, "mbid-1234");
-  assert.equal(results[0].artist, "Fleetwood Mac");
-  assert.equal(results[0].duration, "4:17");
+  assert.equal(results.results[0].slug, "mbid-1234");
+  assert.equal(results.results[0].artist, "Fleetwood Mac");
+  assert.equal(results.results[0].duration, "4:17");
 });
 
 test("builds an on-demand song page from a MusicBrainz lookup", async () => {

@@ -64,16 +64,23 @@ async function request(path, params) {
   return value;
 }
 
-export async function searchAppleMusic(query, limit = 20) {
+export async function searchAppleMusic(query, limit = 20, offset = 0) {
+  const requestedLimit = Math.min(200, offset + limit);
   const body = await request("search", {
     term: query,
     media: "music",
     entity: "song",
-    limit: String(limit),
+    limit: String(requestedLimit),
     country: "US",
     explicit: "Yes"
   });
-  return (body.results || []).map(normalizeAppleResult);
+  return {
+    results: (body.results || [])
+      .slice(offset, offset + limit)
+      .map(normalizeAppleResult),
+    total: Number(body.resultCount || 0),
+    offset
+  };
 }
 
 export async function lookupAppleTrack(id) {

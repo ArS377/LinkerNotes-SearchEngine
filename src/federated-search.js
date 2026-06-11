@@ -59,23 +59,32 @@ export async function federatedSearch(
   {
     musicBrainzSearch = searchMusicBrainz,
     appleSearch = searchAppleMusic,
-    limit = 20
+    limit = 20,
+    offset = 0
   } = {}
 ) {
-  const local = searchRecordings(query, limit).map((result) => ({
+  const local = (offset === 0 ? searchRecordings(query, limit) : []).map((result) => ({
     ...result,
     source: "Liner Notes",
     external: false
   }));
 
   const [musicBrainzResponse, appleResponse] = await Promise.allSettled([
-    musicBrainzSearch(query, limit),
-    appleSearch(query, limit)
+    musicBrainzSearch(query, limit, offset),
+    appleSearch(query, limit, offset)
   ]);
-  const musicBrainz = musicBrainzResponse.status === "fulfilled"
+  const musicBrainzPayload = musicBrainzResponse.status === "fulfilled"
     ? musicBrainzResponse.value
-    : [];
-  const apple = appleResponse.status === "fulfilled" ? appleResponse.value : [];
+    : { results: [], total: 0 };
+  const applePayload = appleResponse.status === "fulfilled"
+    ? appleResponse.value
+    : { results: [], total: 0 };
+  const musicBrainz = Array.isArray(musicBrainzPayload)
+    ? musicBrainzPayload
+    : musicBrainzPayload.results;
+  const apple = Array.isArray(applePayload)
+    ? applePayload
+    : applePayload.results;
   const providerStatus = {
     musicBrainz: musicBrainzResponse.status === "fulfilled" ? "ok" : "unavailable",
     apple: appleResponse.status === "fulfilled" ? "ok" : "unavailable"
@@ -125,5 +134,11 @@ export async function federatedSearch(
       ? "unavailable"
       : "ok",
     providerStatus
+    ,
+    offset,
+    nextOffset: offset + limit,
+    hasMore:
+      offset + limit < Number(musicBrainzPayload.total || 0)
+      || offset + limit < Number(applePayload.total || 0)
   };
 }

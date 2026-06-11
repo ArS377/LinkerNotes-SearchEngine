@@ -29,11 +29,11 @@ test("normalizes Apple search results with exact playback metadata", async () =>
   }));
 
   const results = await searchAppleMusic("Once in a Lifetime Talking Heads");
-  assert.equal(results[0].slug, "apple-300948073");
-  assert.equal(results[0].duration, "4:19");
-  assert.equal(results[0].appleMusicUrl, track.trackViewUrl);
-  assert.equal(results[0].previewUrl, track.previewUrl);
-  assert.match(results[0].artworkUrl, /600x600bb/);
+  assert.equal(results.results[0].slug, "apple-300948073");
+  assert.equal(results.results[0].duration, "4:19");
+  assert.equal(results.results[0].appleMusicUrl, track.trackViewUrl);
+  assert.equal(results.results[0].previewUrl, track.previewUrl);
+  assert.match(results.results[0].artworkUrl, /600x600bb/);
 });
 
 test("builds an on-demand page from an Apple track", async () => {

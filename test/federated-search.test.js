@@ -147,3 +147,38 @@ test("a local lyric match retains enough weight to beat unrelated global text", 
 
   assert.equal(result.results[0].slug, "alright-kendrick-lamar");
 });
+
+test("passes offsets to providers and reports another page", async () => {
+  const calls = [];
+  const result = await federatedSearch("ambient", {
+    offset: 20,
+    limit: 20,
+    musicBrainzSearch: async (_query, limit, offset) => {
+      calls.push(["musicbrainz", limit, offset]);
+      return {
+        results: [
+          {
+            slug: "mbid-page-two",
+            title: "Ambient Piece",
+            artist: "Example Artist",
+            source: "MusicBrainz",
+            external: true
+          }
+        ],
+        total: 61
+      };
+    },
+    appleSearch: async (_query, limit, offset) => {
+      calls.push(["apple", limit, offset]);
+      return { results: [], total: 25 };
+    }
+  });
+
+  assert.deepEqual(calls, [
+    ["musicbrainz", 20, 20],
+    ["apple", 20, 20]
+  ]);
+  assert.equal(result.hasMore, true);
+  assert.equal(result.nextOffset, 40);
+  assert.equal(result.localCount, 0);
+});

@@ -149,9 +149,18 @@ export const server = createServer(async (request, response) => {
 
   if (url.pathname === "/api/search") {
     const query = url.searchParams.get("q") || "";
+    const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") || "0", 10) || 0);
     const search = query
-      ? await federatedSearch(query)
-      : { results: [], localCount: 0, globalCount: 0, remoteStatus: "ok" };
+      ? await federatedSearch(query, { offset })
+      : {
+          results: [],
+          localCount: 0,
+          globalCount: 0,
+          remoteStatus: "ok",
+          offset: 0,
+          nextOffset: 20,
+          hasMore: false
+        };
     sendJson(response, 200, {
       query,
       ...search
@@ -206,10 +215,11 @@ export const server = createServer(async (request, response) => {
     );
     try {
       const recording = await lookupMusicBrainzRecording(id);
-      const appleResults = await searchAppleMusic(
+      const applePayload = await searchAppleMusic(
         `${recording.title} ${recording.artist.name}`,
         5
-      ).catch(() => []);
+      ).catch(() => ({ results: [] }));
+      const appleResults = applePayload.results || applePayload;
       const exactApple = appleResults.find(
         (candidate) =>
           candidate.title.toLowerCase() === recording.title.toLowerCase()
@@ -260,10 +270,11 @@ export const server = createServer(async (request, response) => {
       sendJson(response, 404, { error: "Song not found" });
       return;
     }
-    const appleResults = await searchAppleMusic(
+    const applePayload = await searchAppleMusic(
       `${recording.title} ${recording.artist.name}`,
       5
-    ).catch(() => []);
+    ).catch(() => ({ results: [] }));
+    const appleResults = applePayload.results || applePayload;
     const exactApple = appleResults.find(
       (candidate) =>
         candidate.title.toLowerCase() === recording.title.toLowerCase()

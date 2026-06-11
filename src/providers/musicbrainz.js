@@ -122,12 +122,17 @@ export function normalizeMusicBrainzResult(recording) {
   };
 }
 
-export async function searchMusicBrainz(query, limit = 12) {
+export async function searchMusicBrainz(query, limit = 20, offset = 0) {
   const body = await requestMusicBrainz("recording", {
     query,
-    limit: String(limit)
+    limit: String(limit),
+    offset: String(offset)
   });
-  return (body.recordings || []).map(normalizeMusicBrainzResult);
+  return {
+    results: (body.recordings || []).map(normalizeMusicBrainzResult),
+    total: Number(body.count || 0),
+    offset: Number(body.offset || offset)
+  };
 }
 
 export async function lookupMusicBrainzRecording(id) {

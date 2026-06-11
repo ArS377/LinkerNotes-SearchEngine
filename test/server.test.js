@@ -92,6 +92,8 @@ test("search endpoint returns explained matches", async () => {
   assert.equal(body.results[0].slug, "smells-like-teen-spirit-nirvana");
   assert.equal(body.results[0].matchReason, "lyric match");
   assert.equal(body.remoteStatus, "ok");
+  assert.equal(body.offset, 0);
+  assert.equal(typeof body.hasMore, "boolean");
 });
 
 test("external song endpoint builds a global catalog page", async () => {

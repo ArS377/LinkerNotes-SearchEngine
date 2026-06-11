@@ -236,29 +236,42 @@ async function loadDiscover() {
   }
 }
 
-async function renderSearch(query) {
+async function renderSearch(query, { append = false, offset = 0 } = {}) {
   showView("results");
   syncInputs(query);
-  resultsTitle.textContent = `“${query}”`;
-  resultsSummary.textContent = "";
-  resultsList.innerHTML = '<div class="loading-state">Searching the catalog…</div>';
+  if (!append) {
+    resultsTitle.textContent = `“${query}”`;
+    resultsSummary.textContent = "";
+    resultsList.innerHTML = '<div class="loading-state">Searching the catalog…</div>';
+  } else {
+    resultsList.querySelector("[data-load-more]")?.remove();
+    resultsList.insertAdjacentHTML(
+      "beforeend",
+      '<div class="loading-state load-more-state">Searching deeper…</div>'
+    );
+  }
   document.title = `${query} - Liner Notes`;
 
   try {
-    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    const response = await fetch(
+      `/api/search?q=${encodeURIComponent(query)}&offset=${offset}`
+    );
     if (!response.ok) throw new Error("Search request failed");
     const body = await response.json();
+    resultsList.querySelector(".load-more-state")?.remove();
     const coverage = body.remoteStatus === "unavailable"
       ? "Global catalog temporarily unavailable; showing local matches."
       : `${body.localCount} enriched locally · ${body.globalCount} global matches`;
     const providerCoverage = body.providerStatus
       ? ` · MusicBrainz ${body.providerStatus.musicBrainz} · Apple ${body.providerStatus.apple}`
       : "";
-    resultsSummary.textContent = `${body.results.length} ${
-      body.results.length === 1 ? "recording" : "recordings"
-    } found · ${coverage}${providerCoverage}`;
+    if (!append) {
+      resultsSummary.textContent = `${body.results.length} ${
+        body.results.length === 1 ? "recording" : "recordings"
+      } on this page · ${coverage}${providerCoverage}`;
+    }
 
-    if (body.results.length === 0) {
+    if (body.results.length === 0 && !append) {
       resultsList.innerHTML = `
         <div class="empty-state">
           <h2>Nothing surfaced yet.</h2>
@@ -268,14 +281,32 @@ async function renderSearch(query) {
       return;
     }
 
-    resultsList.innerHTML = body.results.map(renderResult).join("");
+    const markup = body.results.map(renderResult).join("");
+    if (append) resultsList.insertAdjacentHTML("beforeend", markup);
+    else resultsList.innerHTML = markup;
+    if (body.hasMore) {
+      resultsList.insertAdjacentHTML(
+        "beforeend",
+        `<button class="load-more" type="button" data-load-more="${body.nextOffset}" data-load-query="${escapeHtml(query)}">
+          Load more recordings
+        </button>`
+      );
+    }
   } catch {
-    resultsList.innerHTML = `
-      <div class="error-state">
-        <h2>Search took a wrong turn.</h2>
-        <p>Please try again in a moment.</p>
-      </div>
-    `;
+    resultsList.querySelector(".load-more-state")?.remove();
+    if (append) {
+      resultsList.insertAdjacentHTML(
+        "beforeend",
+        `<button class="load-more" type="button" data-load-more="${offset}" data-load-query="${escapeHtml(query)}">Retry loading more</button>`
+      );
+    } else {
+      resultsList.innerHTML = `
+        <div class="error-state">
+          <h2>Search took a wrong turn.</h2>
+          <p>Please try again in a moment.</p>
+        </div>
+      `;
+    }
   }
 }
 
@@ -795,6 +826,16 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("[data-clear-history]")) {
     localStorage.removeItem(recentKey);
     renderRecentSearches();
+    return;
+  }
+
+  const loadMore = event.target.closest("[data-load-more]");
+  if (loadMore) {
+    loadMore.disabled = true;
+    renderSearch(loadMore.dataset.loadQuery, {
+      append: true,
+      offset: Number(loadMore.dataset.loadMore)
+    });
     return;
   }
 

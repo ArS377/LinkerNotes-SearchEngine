@@ -670,6 +670,31 @@ main {
   color: var(--muted);
 }
 
+.load-more {
+  display: block;
+  width: 100%;
+  min-height: 58px;
+  margin-top: 28px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.load-more:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.load-more:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+.load-more-state {
+  padding: 34px 0;
+}
+
 .song-search-wrap {
   padding-top: 28px;
   padding-bottom: 28px;

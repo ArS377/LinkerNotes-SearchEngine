@@ -16,6 +16,7 @@ test("ranks an exact title ahead of alternate versions", () => {
 test("finds songs by artist", () => {
   const results = searchRecordings("Daft Punk");
   assert.equal(results[0].slug, "get-lucky-daft-punk");
+  assert.equal(results[0].artistSlug, "daft-punk");
   assert.equal(results[0].matchReason, "artist match");
 });
 

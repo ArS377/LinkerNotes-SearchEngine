@@ -1,6 +1,7 @@
 export const artists = [
   {
     id: "artist-taylor-swift",
+    slug: "taylor-swift",
     name: "Taylor Swift",
     country: "United States",
     summary:
@@ -9,6 +10,7 @@ export const artists = [
   },
   {
     id: "artist-queen",
+    slug: "queen",
     name: "Queen",
     country: "United Kingdom",
     summary:
@@ -17,6 +19,7 @@ export const artists = [
   },
   {
     id: "artist-dolly-parton",
+    slug: "dolly-parton",
     name: "Dolly Parton",
     country: "United States",
     summary:
@@ -25,6 +28,7 @@ export const artists = [
   },
   {
     id: "artist-kendrick-lamar",
+    slug: "kendrick-lamar",
     name: "Kendrick Lamar",
     country: "United States",
     summary:
@@ -33,6 +37,7 @@ export const artists = [
   },
   {
     id: "artist-daft-punk",
+    slug: "daft-punk",
     name: "Daft Punk",
     country: "France",
     summary:
@@ -41,6 +46,7 @@ export const artists = [
   },
   {
     id: "artist-nirvana",
+    slug: "nirvana",
     name: "Nirvana",
     country: "United States",
     summary:
@@ -307,9 +313,81 @@ export const recordings = [
 ];
 
 const artistById = new Map(artists.map((artist) => [artist.id, artist]));
+const artistBySlug = new Map(artists.map((artist) => [artist.slug, artist]));
 
 export function getArtist(id) {
   return artistById.get(id);
+}
+
+function recordingSummary(recording) {
+  const artist = getArtist(recording.artistId);
+  return {
+    slug: recording.slug,
+    title: recording.title,
+    artist: artist.name,
+    artistSlug: artist.slug,
+    album: recording.album,
+    releaseDate: recording.releaseDate,
+    version: recording.version,
+    genres: recording.genres,
+    color: recording.color
+  };
+}
+
+export function getArtistProfile(slug) {
+  const artist = artistBySlug.get(slug);
+  if (!artist) return null;
+
+  const artistRecordings = recordings
+    .filter((recording) => recording.artistId === artist.id)
+    .sort((left, right) => right.prominence - left.prominence)
+    .map(recordingSummary);
+
+  return {
+    ...artist,
+    genres: [...new Set(artistRecordings.flatMap((recording) => recording.genres))],
+    recordings: artistRecordings
+  };
+}
+
+export function getGenres() {
+  const genreMap = new Map();
+
+  for (const recording of recordings) {
+    for (const genre of recording.genres) {
+      if (!genreMap.has(genre)) genreMap.set(genre, []);
+      genreMap.get(genre).push(recording);
+    }
+  }
+
+  return [...genreMap.entries()]
+    .map(([name, genreRecordings]) => ({
+      slug: name.replaceAll(" ", "-"),
+      name,
+      count: genreRecordings.length,
+      color: genreRecordings[0].color
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+export function getGenre(slug) {
+  const genre = getGenres().find((candidate) => candidate.slug === slug);
+  if (!genre) return null;
+
+  return {
+    ...genre,
+    recordings: recordings
+      .filter((recording) => recording.genres.includes(genre.name))
+      .sort((left, right) => right.prominence - left.prominence)
+      .map(recordingSummary)
+  };
+}
+
+export function getFeaturedRecordings(limit = 6) {
+  return [...recordings]
+    .sort((left, right) => right.prominence - left.prominence)
+    .slice(0, limit)
+    .map(recordingSummary);
 }
 
 export function getRecording(slug) {

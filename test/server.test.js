@@ -41,6 +41,36 @@ test("song endpoint returns 404 for unknown slugs", async () => {
   assert.equal(response.status, 404);
 });
 
+test("discover endpoint returns featured recordings and generated genres", async () => {
+  const response = await fetch(`${baseUrl}/api/discover`);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.featured[0].slug, "bohemian-rhapsody-queen");
+  assert.ok(body.genres.some((genre) => genre.slug === "hip-hop"));
+});
+
+test("artist endpoint returns an artist discography", async () => {
+  const response = await fetch(`${baseUrl}/api/artists/taylor-swift`);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.name, "Taylor Swift");
+  assert.equal(body.recordings.length, 2);
+});
+
+test("genre endpoint returns matching recordings", async () => {
+  const response = await fetch(`${baseUrl}/api/genres/country`);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.ok(body.recordings.every((recording) => recording.genres.includes("country")));
+});
+
+test("discovery endpoints return 404 for unknown entities", async () => {
+  const artistResponse = await fetch(`${baseUrl}/api/artists/unknown`);
+  const genreResponse = await fetch(`${baseUrl}/api/genres/unknown`);
+  assert.equal(artistResponse.status, 404);
+  assert.equal(genreResponse.status, 404);
+});
+
 test("serves the production application shell", async () => {
   const response = await fetch(baseUrl);
   const body = await response.text();

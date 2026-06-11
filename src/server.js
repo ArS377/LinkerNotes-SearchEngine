@@ -2,7 +2,13 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize as normalizePath } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getRecording } from "./catalog.js";
+import {
+  getArtistProfile,
+  getFeaturedRecordings,
+  getGenre,
+  getGenres,
+  getRecording
+} from "./catalog.js";
 import { searchRecordings } from "./search.js";
 
 const root = fileURLToPath(new URL("../public", import.meta.url));
@@ -71,6 +77,36 @@ export const server = createServer(async (request, response) => {
       query,
       results: searchRecordings(query)
     });
+    return;
+  }
+
+  if (url.pathname === "/api/discover") {
+    sendJson(response, 200, {
+      featured: getFeaturedRecordings(),
+      genres: getGenres()
+    });
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/artists/")) {
+    const slug = decodeURIComponent(url.pathname.slice("/api/artists/".length));
+    const artist = getArtistProfile(slug);
+    if (!artist) {
+      sendJson(response, 404, { error: "Artist not found" });
+      return;
+    }
+    sendJson(response, 200, artist);
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/genres/")) {
+    const slug = decodeURIComponent(url.pathname.slice("/api/genres/".length));
+    const genre = getGenre(slug);
+    if (!genre) {
+      sendJson(response, 404, { error: "Genre not found" });
+      return;
+    }
+    sendJson(response, 200, genre);
     return;
   }
 

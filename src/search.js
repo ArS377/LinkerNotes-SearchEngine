@@ -74,6 +74,7 @@ export function searchRecordings(rawQuery, limit = 8) {
         slug: recording.slug,
         title: recording.title,
         artist: artist.name,
+        artistSlug: artist.slug,
         album: recording.album,
         releaseDate: recording.releaseDate,
         version: recording.version,

@@ -1,0 +1,26 @@
+# AI assistant and workflow files
+.claude/
+.codex/
+.gstack/
+.agents/
+CLAUDE.md
+AGENTS.md
+GPT*.md
+**/*gstack*
+**/*gpt*
+
+# Planning and design artifacts
+docs/
+
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+
+# Common generated files
+.DS_Store
+node_modules/
+dist/
+build/
+coverage/
+*.log

@@ -42,6 +42,10 @@ async function sendStatic(response, pathname) {
     });
     response.end(content);
   } catch {
+    if (extname(requested)) {
+      sendJson(response, 404, { error: "Asset not found" });
+      return;
+    }
     const index = await readFile(join(root, "index.html"));
     response.writeHead(200, { "content-type": contentTypes[".html"] });
     response.end(index);
@@ -51,7 +55,7 @@ async function sendStatic(response, pathname) {
 export const server = createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
 
-  if (request.method !== "GET") {
+  if (request.method !== "GET" && request.method !== "HEAD") {
     sendJson(response, 405, { error: "Method not allowed" });
     return;
   }

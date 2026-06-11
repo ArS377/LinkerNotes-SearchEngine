@@ -40,3 +40,29 @@ test("song endpoint returns 404 for unknown slugs", async () => {
   const response = await fetch(`${baseUrl}/api/songs/not-a-song`);
   assert.equal(response.status, 404);
 });
+
+test("serves the production application shell", async () => {
+  const response = await fetch(baseUrl);
+  const body = await response.text();
+  assert.equal(response.status, 200);
+  assert.match(body, /Find the song/);
+  assert.match(body, /data-search-form/);
+});
+
+test("serves client routes through the application shell", async () => {
+  const response = await fetch(`${baseUrl}/songs/jolene-dolly-parton`);
+  const body = await response.text();
+  assert.equal(response.status, 200);
+  assert.match(body, /Liner Notes/);
+});
+
+test("supports deployment probes for static assets", async () => {
+  const response = await fetch(`${baseUrl}/styles.css`, { method: "HEAD" });
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /text\/css/);
+});
+
+test("returns 404 for missing static assets", async () => {
+  const response = await fetch(`${baseUrl}/missing.css`);
+  assert.equal(response.status, 404);
+});

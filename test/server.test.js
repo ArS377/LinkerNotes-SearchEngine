@@ -66,6 +66,26 @@ test("health endpoint reports readiness", async () => {
   assert.deepEqual(await response.json(), { status: "ok" });
 });
 
+test("capabilities endpoint reports configured product features", async () => {
+  const response = await fetch(`${baseUrl}/api/capabilities`);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.globalSearch, true);
+  assert.equal(body.applePlayback, true);
+  assert.equal(typeof body.audioIdentification, "boolean");
+});
+
+test("audio identification reports missing provider configuration", async () => {
+  const response = await fetch(`${baseUrl}/api/identify`, {
+    method: "POST",
+    headers: { "content-type": "audio/mpeg" },
+    body: Buffer.from("sample")
+  });
+  const body = await response.json();
+  assert.equal(response.status, 503);
+  assert.ok(body.required.includes("ACRCLOUD_HOST"));
+});
+
 test("search endpoint returns explained matches", async () => {
   const response = await fetch(`${baseUrl}/api/search?q=with%20the%20lights%20out`);
   const body = await response.json();
@@ -149,6 +169,8 @@ test("serves the production application shell", async () => {
   assert.equal(response.status, 200);
   assert.match(body, /Find the song/);
   assert.match(body, /data-search-form/);
+  assert.match(response.headers.get("content-security-policy"), /frame-ancestors 'none'/);
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
 });
 
 test("serves client routes through the application shell", async () => {

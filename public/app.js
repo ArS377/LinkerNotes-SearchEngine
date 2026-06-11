@@ -10,8 +10,15 @@ const homeDiscovery = document.querySelector("[data-home-discovery]");
 const audioDialog = document.querySelector("[data-audio-dialog]");
 const toast = document.querySelector("[data-toast]");
 const savedCount = document.querySelector("[data-saved-count]");
+const recentSearches = document.querySelector("[data-recent-searches]");
+const audioForm = document.querySelector("[data-audio-form]");
+const audioInput = document.querySelector("[data-audio-input]");
+const audioLabel = document.querySelector("[data-audio-label]");
+const audioStatus = document.querySelector("[data-audio-status]");
 const savedKey = "liner-notes-saved";
+const recentKey = "liner-notes-recent-searches";
 let currentSong = null;
+let capabilities = null;
 
 function showView(name) {
   for (const view of views) {
@@ -84,6 +91,57 @@ function showToast(message) {
   showToast.timeout = window.setTimeout(() => {
     toast.classList.remove("is-visible");
   }, 2200);
+}
+
+function getRecentSearches() {
+  try {
+    const value = JSON.parse(localStorage.getItem(recentKey) || "[]");
+    return Array.isArray(value) ? value.slice(0, 6) : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberSearch(query) {
+  const searches = [
+    query,
+    ...getRecentSearches().filter(
+      (candidate) => candidate.toLowerCase() !== query.toLowerCase()
+    )
+  ].slice(0, 6);
+  localStorage.setItem(recentKey, JSON.stringify(searches));
+  renderRecentSearches();
+}
+
+function renderRecentSearches() {
+  const searches = getRecentSearches();
+  recentSearches.hidden = searches.length === 0;
+  recentSearches.innerHTML = searches.length
+    ? `<span>Recent</span>${searches
+        .map(
+          (query) =>
+            `<button type="button" data-example="${escapeHtml(query)}">${escapeHtml(query)}</button>`
+        )
+        .join("")}<button type="button" data-clear-history>Clear</button>`
+    : "";
+}
+
+async function loadCapabilities() {
+  try {
+    const response = await fetch("/api/capabilities");
+    if (!response.ok) return;
+    capabilities = await response.json();
+    if (!capabilities.audioIdentification) {
+      audioStatus.innerHTML = `
+        <p>
+          Audio recognition needs ACRCloud server credentials. Add the three
+          <code>ACRCLOUD_*</code> values from <code>.env.example</code> to enable it.
+        </p>
+      `;
+    }
+  } catch {
+    capabilities = null;
+  }
 }
 
 function renderResult(result, { showMatch = true } = {}) {
@@ -192,10 +250,13 @@ async function renderSearch(query) {
     const body = await response.json();
     const coverage = body.remoteStatus === "unavailable"
       ? "Global catalog temporarily unavailable; showing local matches."
-      : `${body.localCount} enriched locally · ${body.globalCount} from MusicBrainz`;
+      : `${body.localCount} enriched locally · ${body.globalCount} global matches`;
+    const providerCoverage = body.providerStatus
+      ? ` · MusicBrainz ${body.providerStatus.musicBrainz} · Apple ${body.providerStatus.apple}`
+      : "";
     resultsSummary.textContent = `${body.results.length} ${
       body.results.length === 1 ? "recording" : "recordings"
-    } found · ${coverage}`;
+    } found · ${coverage}${providerCoverage}`;
 
     if (body.results.length === 0) {
       resultsList.innerHTML = `
@@ -629,9 +690,64 @@ for (const form of searchForms) {
     event.preventDefault();
     const query = new FormData(form).get("q").trim();
     if (!query) return;
+    rememberSearch(query);
     route(`/search?q=${encodeURIComponent(query)}`);
   });
 }
+
+audioInput.addEventListener("change", () => {
+  const file = audioInput.files?.[0];
+  audioLabel.textContent = file ? file.name : "Choose an audio clip";
+  audioStatus.textContent = "";
+});
+
+audioForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const file = audioInput.files?.[0];
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) {
+    audioStatus.textContent = "Choose a clip smaller than 10 MB.";
+    return;
+  }
+
+  audioStatus.textContent = "Listening…";
+  const submit = audioForm.querySelector("button[type='submit']");
+  submit.disabled = true;
+  try {
+    const response = await fetch("/api/identify", {
+      method: "POST",
+      headers: {
+        "content-type": file.type || "application/octet-stream"
+      },
+      body: file
+    });
+    const body = await response.json();
+    if (response.status === 503) {
+      audioStatus.innerHTML = `
+        <p>Audio identification is not configured on this server.</p>
+        <small>Required: ${body.required.map(escapeHtml).join(", ")}</small>
+      `;
+      return;
+    }
+    if (!response.ok) throw new Error(body.error || "Identification failed");
+    if (!body.matched || body.results.length === 0) {
+      audioStatus.textContent = "No confident match was found. Try a clearer 10–20 second clip.";
+      return;
+    }
+
+    const match = body.results[0];
+    audioStatus.innerHTML = `
+      <p><strong>Matched:</strong> ${escapeHtml(body.title)} by ${escapeHtml(body.artist)}</p>
+      <a class="dialog-result" href="/songs/${encodeURIComponent(match.slug)}">
+        Open ${escapeHtml(match.title)} <span aria-hidden="true">↗</span>
+      </a>
+    `;
+  } catch (error) {
+    audioStatus.textContent = error.message || "Audio identification failed.";
+  } finally {
+    submit.disabled = false;
+  }
+});
 
 document.addEventListener("click", (event) => {
   const saveButton = event.target.closest("[data-save-song]");
@@ -676,6 +792,12 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  if (event.target.closest("[data-clear-history]")) {
+    localStorage.removeItem(recentKey);
+    renderRecentSearches();
+    return;
+  }
+
   if (event.target.closest("[data-audio-trigger]")) {
     audioDialog.showModal();
   }
@@ -691,4 +813,6 @@ audioDialog.addEventListener("click", (event) => {
 
 window.addEventListener("popstate", renderRoute);
 updateSavedCount();
+renderRecentSearches();
+loadCapabilities();
 renderRoute();

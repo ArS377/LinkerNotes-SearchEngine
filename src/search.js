@@ -87,5 +87,8 @@ export function searchRecordings(rawQuery, limit = 8) {
     .filter((result) => result.score >= 18)
     .sort((left, right) => right.score - left.score)
     .slice(0, limit)
-    .map(({ score, ...result }) => result);
+    .map(({ score, ...result }) => ({
+      ...result,
+      relevanceScore: score
+    }));
 }

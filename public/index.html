@@ -63,6 +63,7 @@
           <button type="button" data-example="Daft Punk">Daft Punk</button>
           <button type="button" data-example="with the lights out">“with the lights out”</button>
         </div>
+        <div class="recent-searches" data-recent-searches hidden></div>
 
         <div class="catalog-strip">
           <p>Explore across genres</p>
@@ -149,15 +150,26 @@
 
     <dialog class="audio-dialog" data-audio-dialog>
       <button class="dialog-close" type="button" data-dialog-close aria-label="Close">×</button>
-      <p class="eyebrow">Next up</p>
+      <p class="eyebrow">Audio identification</p>
       <h2>Hear it. Find it.</h2>
       <p>
-        Audio clip and humming recognition will resolve into the same detailed song
-        pages as text search.
+        Upload a short recording or humming clip. A match opens through the same
+        global search pipeline.
       </p>
-      <div class="waveform" aria-hidden="true">
-        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-      </div>
+      <form class="audio-form" data-audio-form>
+        <label class="audio-drop">
+          <input
+            type="file"
+            accept="audio/*,.mp3,.m4a,.wav,.ogg,.webm"
+            data-audio-input
+            required
+          >
+          <span data-audio-label>Choose an audio clip</span>
+          <small>MP3, M4A, WAV, OGG, or WebM · 10 MB maximum</small>
+        </label>
+        <button type="submit" class="dialog-submit">Identify recording</button>
+      </form>
+      <div class="audio-status" data-audio-status></div>
     </dialog>
 
     <div class="toast" data-toast role="status" aria-live="polite"></div>

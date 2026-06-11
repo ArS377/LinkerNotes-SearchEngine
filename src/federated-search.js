@@ -29,6 +29,14 @@ function globalRelevance(query, result) {
   return score;
 }
 
+function unifiedRelevance(query, result) {
+  const textScore = globalRelevance(query, result);
+  if (result.external) return textScore;
+  const localSignal = Number(result.relevanceScore || 0) * 8;
+  const lyricBonus = result.matchReason === "lyric match" ? 300 : 0;
+  return Math.max(textScore, localSignal + lyricBonus);
+}
+
 function mergeProviderResult(primary, secondary) {
   return {
     ...primary,
@@ -102,8 +110,15 @@ export async function federatedSearch(
         globalRelevance(query, right) - globalRelevance(query, left)
     );
 
+  const results = [...enrichedLocal, ...uniqueRemote]
+    .sort(
+      (left, right) =>
+        unifiedRelevance(query, right) - unifiedRelevance(query, left)
+    )
+    .slice(0, limit);
+
   return {
-    results: [...enrichedLocal, ...uniqueRemote].slice(0, limit),
+    results,
     localCount: enrichedLocal.length,
     globalCount: uniqueRemote.length,
     remoteStatus: Object.values(providerStatus).every((status) => status === "unavailable")

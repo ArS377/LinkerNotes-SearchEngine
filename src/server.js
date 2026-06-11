@@ -13,6 +13,10 @@ import { federatedSearch } from "./federated-search.js";
 import { lookupMusicBrainzRecording } from "./providers/musicbrainz.js";
 import { lookupAppleTrack, searchAppleMusic } from "./providers/apple.js";
 import { resolveSpotifyTrack } from "./providers/spotify.js";
+import {
+  audioIdentificationConfigured,
+  identifyAudio
+} from "./providers/acrcloud.js";
 
 const root = fileURLToPath(new URL("../public", import.meta.url));
 const port = Number(process.env.PORT || 3000);
@@ -28,7 +32,9 @@ const contentTypes = {
 function sendJson(response, status, body) {
   response.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
-    "cache-control": "no-store"
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "strict-origin-when-cross-origin"
   });
   response.end(JSON.stringify(body));
 }
@@ -47,7 +53,11 @@ async function sendStatic(response, pathname) {
     const content = await readFile(filePath);
     response.writeHead(200, {
       "content-type": contentTypes[extname(filePath)] || "application/octet-stream",
-      "cache-control": "public, max-age=300"
+      "cache-control": "public, max-age=300",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "content-security-policy":
+        "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https: data:; media-src https:; connect-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     });
     response.end(content);
   } catch {
@@ -56,13 +66,76 @@ async function sendStatic(response, pathname) {
       return;
     }
     const index = await readFile(join(root, "index.html"));
-    response.writeHead(200, { "content-type": contentTypes[".html"] });
+    response.writeHead(200, {
+      "content-type": contentTypes[".html"],
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "content-security-policy":
+        "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https: data:; media-src https:; connect-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    });
     response.end(index);
   }
 }
 
 export const server = createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
+
+  if (url.pathname === "/api/capabilities") {
+    sendJson(response, 200, {
+      globalSearch: true,
+      applePlayback: true,
+      exactSpotifyLinks: Boolean(
+        process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET
+      ),
+      audioIdentification: audioIdentificationConfigured()
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/identify" && request.method === "POST") {
+    const chunks = [];
+    let total = 0;
+    for await (const chunk of request) {
+      total += chunk.length;
+      if (total > 10 * 1024 * 1024) {
+        sendJson(response, 413, { error: "Audio clip must be 10 MB or smaller" });
+        return;
+      }
+      chunks.push(chunk);
+    }
+
+    try {
+      const match = await identifyAudio(
+        Buffer.concat(chunks),
+        request.headers["content-type"] || "audio/mpeg"
+      );
+      if (!match.matched) {
+        sendJson(response, 200, { matched: false, results: [] });
+        return;
+      }
+      const query = `${match.title} ${match.artist}`;
+      const search = await federatedSearch(query);
+      sendJson(response, 200, { ...match, query, ...search });
+    } catch (error) {
+      if (error.code === "NOT_CONFIGURED") {
+        sendJson(response, 503, {
+          error: "Audio identification is not configured",
+          required: [
+            "ACRCLOUD_HOST",
+            "ACRCLOUD_ACCESS_KEY",
+            "ACRCLOUD_ACCESS_SECRET"
+          ]
+        });
+        return;
+      }
+      if (error.code === "EMPTY_AUDIO") {
+        sendJson(response, 400, { error: error.message });
+        return;
+      }
+      sendJson(response, 502, { error: "Audio identification provider unavailable" });
+    }
+    return;
+  }
 
   if (request.method !== "GET" && request.method !== "HEAD") {
     sendJson(response, 405, { error: "Method not allowed" });

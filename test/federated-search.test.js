@@ -110,3 +110,40 @@ test("merges Apple playback data into an equivalent MusicBrainz result", async (
   assert.equal(result.results[0].appleMusicUrl, "https://music.apple.com/track");
   assert.deepEqual(result.results[0].providers, ["MusicBrainz", "Apple Music"]);
 });
+
+test("a strong global title match outranks a weak local artist match", async () => {
+  const result = await federatedSearch("Not Like Us Kendrick Lamar", {
+    musicBrainzSearch: async () => [
+      {
+        slug: "mbid-not-like-us",
+        title: "Not Like Us",
+        artist: "Kendrick Lamar",
+        source: "MusicBrainz",
+        external: true,
+        score: 95
+      }
+    ],
+    appleSearch: async () => []
+  });
+
+  assert.equal(result.results[0].slug, "mbid-not-like-us");
+  assert.equal(result.results[1].slug, "alright-kendrick-lamar");
+});
+
+test("a local lyric match retains enough weight to beat unrelated global text", async () => {
+  const result = await federatedSearch("we gon be alright", {
+    musicBrainzSearch: async () => [
+      {
+        slug: "mbid-unrelated",
+        title: "We",
+        artist: "Gon Be",
+        source: "MusicBrainz",
+        external: true,
+        score: 100
+      }
+    ],
+    appleSearch: async () => []
+  });
+
+  assert.equal(result.results[0].slug, "alright-kendrick-lamar");
+});

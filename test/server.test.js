@@ -15,6 +15,8 @@ before(async () => {
         resultCount: 1,
         results: [
           {
+            wrapperType: "track",
+            kind: "song",
             trackId: isLookup ? 99 : 1,
             artistId: 2,
             artistName: isLookup ? "Apple Artist" : "Kendrick Lamar",
@@ -34,6 +36,19 @@ before(async () => {
     };
   });
   setMusicBrainzFetchForTests(async (url) => {
+    if (String(url).includes("/artist/remote-artist")) {
+      return {
+        ok: true,
+        json: async () => ({
+          id: "remote-artist",
+          name: "Remote Artist",
+          type: "Person",
+          country: "US",
+          genres: [],
+          relations: []
+        })
+      };
+    }
     if (String(url).includes("/recording/remote-id")) {
       return {
         ok: true,
@@ -96,6 +111,14 @@ test("search endpoint returns explained matches", async () => {
   assert.equal(typeof body.hasMore, "boolean");
 });
 
+test("suggest endpoint returns local and commercial candidates", async () => {
+  const response = await fetch(`${baseUrl}/api/suggest?q=alright`);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.ok(body.suggestions.length > 0);
+  assert.equal(body.suggestions[0].title, "Alright");
+});
+
 test("external song endpoint builds a global catalog page", async () => {
   const response = await fetch(`${baseUrl}/api/external-songs/remote-id`);
   const body = await response.json();
@@ -149,6 +172,15 @@ test("artist endpoint returns an artist discography", async () => {
   assert.equal(response.status, 200);
   assert.equal(body.name, "Taylor Swift");
   assert.equal(body.recordings.length, 2);
+});
+
+test("global artist routes return provider profiles", async () => {
+  const musicBrainz = await fetch(
+    `${baseUrl}/api/external-artists/remote-artist`
+  );
+  const apple = await fetch(`${baseUrl}/api/apple-artists/2`);
+  assert.equal(musicBrainz.status, 200);
+  assert.equal(apple.status, 200);
 });
 
 test("genre endpoint returns matching recordings", async () => {

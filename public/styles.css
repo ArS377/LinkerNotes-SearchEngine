@@ -158,6 +158,11 @@ nav a:hover {
   text-transform: uppercase;
 }
 
+.soon-label.is-ready {
+  background: var(--blue);
+  color: white;
+}
+
 main {
   min-height: calc(100vh - 164px);
 }
@@ -359,6 +364,7 @@ main {
 }
 
 .hero-search {
+  position: relative;
   display: flex;
   max-width: 850px;
   border-bottom: 2px solid var(--ink);
@@ -479,9 +485,76 @@ main {
 }
 
 .compact-search {
+  position: relative;
   display: flex;
   max-width: 960px;
   border-bottom: 2px solid var(--ink);
+}
+
+.suggestions-panel {
+  position: absolute;
+  z-index: 25;
+  top: calc(100% + 2px);
+  left: 0;
+  width: 100%;
+  max-height: min(520px, 62vh);
+  overflow-y: auto;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 12px 12px 0 rgba(23, 23, 20, 0.16);
+}
+
+.suggestion-item {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--line);
+}
+
+.suggestion-item:last-child {
+  border-bottom: 0;
+}
+
+.suggestion-item:hover,
+.suggestion-item.is-active {
+  background: var(--acid);
+}
+
+.suggestion-item strong,
+.suggestion-item small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggestion-item strong {
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+.suggestion-item small {
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+
+.suggestion-art {
+  display: block;
+  width: 48px;
+  aspect-ratio: 1;
+  background: var(--art-color);
+  background-position: center;
+  background-size: cover;
+}
+
+.suggestion-empty {
+  padding: 18px;
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 
 .compact-search input {

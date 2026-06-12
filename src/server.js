@@ -10,8 +10,16 @@ import {
   getRecording
 } from "./catalog.js";
 import { federatedSearch } from "./federated-search.js";
-import { lookupMusicBrainzRecording } from "./providers/musicbrainz.js";
-import { lookupAppleTrack, searchAppleMusic } from "./providers/apple.js";
+import { searchRecordings } from "./search.js";
+import {
+  lookupMusicBrainzArtist,
+  lookupMusicBrainzRecording
+} from "./providers/musicbrainz.js";
+import {
+  lookupAppleArtist,
+  lookupAppleTrack,
+  searchAppleMusic
+} from "./providers/apple.js";
 import { resolveSpotifyTrack } from "./providers/spotify.js";
 import {
   audioIdentificationConfigured,
@@ -168,6 +176,38 @@ export const server = createServer(async (request, response) => {
     return;
   }
 
+  if (url.pathname === "/api/suggest") {
+    const query = (url.searchParams.get("q") || "").trim();
+    if (query.length < 2) {
+      sendJson(response, 200, { query, suggestions: [] });
+      return;
+    }
+    const local = searchRecordings(query, 5).map((result) => ({
+      ...result,
+      source: "Liner Notes",
+      external: false
+    }));
+    const applePayload = await searchAppleMusic(query, 8).catch(() => ({
+      results: []
+    }));
+    const seen = new Set(
+      local.map((result) => `${result.title}::${result.artist}`.toLowerCase())
+    );
+    const apple = (applePayload.results || applePayload)
+      .filter((result) => {
+        const key = `${result.title}::${result.artist}`.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, Math.max(0, 8 - local.length));
+    sendJson(response, 200, {
+      query,
+      suggestions: [...local, ...apple].slice(0, 8)
+    });
+    return;
+  }
+
   if (url.pathname === "/api/discover") {
     sendJson(response, 200, {
       featured: getFeaturedRecordings(),
@@ -184,6 +224,28 @@ export const server = createServer(async (request, response) => {
       return;
     }
     sendJson(response, 200, artist);
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/external-artists/")) {
+    const id = decodeURIComponent(
+      url.pathname.slice("/api/external-artists/".length)
+    );
+    try {
+      sendJson(response, 200, await lookupMusicBrainzArtist(id));
+    } catch {
+      sendJson(response, 502, { error: "Global artist lookup unavailable" });
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/apple-artists/")) {
+    const id = decodeURIComponent(url.pathname.slice("/api/apple-artists/".length));
+    try {
+      sendJson(response, 200, await lookupAppleArtist(id));
+    } catch {
+      sendJson(response, 502, { error: "Commercial artist lookup unavailable" });
+    }
     return;
   }
 

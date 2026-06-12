@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  lookupAppleArtist,
   lookupAppleTrack,
   searchAppleMusic,
   setAppleFetchForTests
@@ -46,4 +47,27 @@ test("builds an on-demand page from an Apple track", async () => {
   assert.equal(recording.title, "Once In a Lifetime");
   assert.equal(recording.artist.name, "Talking Heads");
   assert.equal(recording.isStreamable, true);
+});
+
+test("builds an Apple artist profile with recordings", async () => {
+  setAppleFetchForTests(async () => ({
+    ok: true,
+    json: async () => ({
+      resultCount: 2,
+      results: [
+        {
+          wrapperType: "artist",
+          artistType: "Artist",
+          artistId: 155546,
+          artistName: "Talking Heads",
+          primaryGenreName: "Alternative"
+        },
+        { ...track, wrapperType: "track", kind: "song" }
+      ]
+    })
+  }));
+
+  const artist = await lookupAppleArtist("155546");
+  assert.equal(artist.name, "Talking Heads");
+  assert.equal(artist.recordings[0].title, "Once In a Lifetime");
 });

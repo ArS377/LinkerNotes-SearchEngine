@@ -181,13 +181,58 @@ export async function lookupMusicBrainzRecording(id) {
     related: [],
     artist: {
       id: artist?.id || null,
-      slug: null,
+      slug: artist?.id ? `mbid-${artist.id}` : null,
       name: result.artist,
       country: artist?.country || "Country unavailable",
       summary:
         "This artist is available through the global MusicBrainz catalog but does not yet have a locally enriched profile.",
       sources: ["MusicBrainz"]
     }
+  };
+}
+
+export async function lookupMusicBrainzArtist(id, limit = 50) {
+  const [artist, recordings] = await Promise.all([
+    requestMusicBrainz(`artist/${encodeURIComponent(id)}`, {
+      inc: "genres+url-rels"
+    }),
+    requestMusicBrainz("recording", {
+      query: `arid:${id}`,
+      limit: String(limit),
+      offset: "0"
+    })
+  ]);
+
+  const normalizedRecordings = (recordings.recordings || [])
+    .map(normalizeMusicBrainzResult)
+    .sort((left, right) => right.score - left.score);
+  const urls = artist.relations
+    ?.map((relation) => ({
+      type: relation.type,
+      url: relation.url?.resource
+    }))
+    .filter((relation) => relation.url) || [];
+
+  return {
+    id: artist.id,
+    slug: `mbid-${artist.id}`,
+    external: true,
+    source: "MusicBrainz",
+    name: artist.name,
+    sortName: artist["sort-name"] || artist.name,
+    type: artist.type || "Artist",
+    country: artist.country || artist.area?.name || "Country unavailable",
+    lifeSpan: artist["life-span"] || null,
+    disambiguation: artist.disambiguation || null,
+    summary:
+      artist.disambiguation
+      || `${artist.type || "Artist"} profile from the global MusicBrainz catalog.`,
+    genres: (artist.genres || [])
+      .sort((left, right) => (right.count || 0) - (left.count || 0))
+      .slice(0, 8)
+      .map((genre) => genre.name),
+    urls,
+    recordings: normalizedRecordings
   };
 }
 

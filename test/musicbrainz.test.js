@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  lookupMusicBrainzArtist,
   lookupMusicBrainzRecording,
   searchMusicBrainz,
   setMusicBrainzFetchForTests
@@ -56,4 +57,42 @@ test("builds an on-demand song page from a MusicBrainz lookup", async () => {
   assert.equal(recording.artist.name, "Talking Heads");
   assert.equal(recording.external, true);
   assert.match(recording.musicBrainzUrl, /5678/);
+});
+
+test("builds a global artist profile with recordings", async () => {
+  setMusicBrainzFetchForTests(async (url) => {
+    if (String(url).includes("/artist/")) {
+      return {
+        ok: true,
+        json: async () => ({
+          id: "artist-2",
+          name: "Talking Heads",
+          type: "Group",
+          country: "US",
+          genres: [{ name: "new wave", count: 10 }],
+          relations: []
+        })
+      };
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        recordings: [
+          {
+            id: "recording-1",
+            title: "Once in a Lifetime",
+            score: 100,
+            "artist-credit": [
+              { name: "Talking Heads", artist: { id: "artist-2", name: "Talking Heads" } }
+            ],
+            releases: [{ title: "Remain in Light", status: "Official", date: "1980" }]
+          }
+        ]
+      })
+    };
+  });
+
+  const artist = await lookupMusicBrainzArtist("artist-2");
+  assert.equal(artist.name, "Talking Heads");
+  assert.equal(artist.recordings[0].title, "Once in a Lifetime");
 });

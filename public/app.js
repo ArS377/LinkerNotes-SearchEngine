@@ -10,6 +10,7 @@ const homeDiscovery = document.querySelector("[data-home-discovery]");
 const audioDialog = document.querySelector("[data-audio-dialog]");
 const toast = document.querySelector("[data-toast]");
 const savedCount = document.querySelector("[data-saved-count]");
+const audioCapability = document.querySelector("[data-audio-capability]");
 const recentSearches = document.querySelector("[data-recent-searches]");
 const audioForm = document.querySelector("[data-audio-form]");
 const audioInput = document.querySelector("[data-audio-input]");
@@ -131,6 +132,13 @@ async function loadCapabilities() {
     const response = await fetch("/api/capabilities");
     if (!response.ok) return;
     capabilities = await response.json();
+    audioCapability.textContent = capabilities.audioIdentification
+      ? "Ready"
+      : "Setup";
+    audioCapability.classList.toggle(
+      "is-ready",
+      capabilities.audioIdentification
+    );
     if (!capabilities.audioIdentification) {
       audioStatus.innerHTML = `
         <p>
@@ -141,6 +149,7 @@ async function loadCapabilities() {
     }
   } catch {
     capabilities = null;
+    audioCapability.textContent = "Offline";
   }
 }
 
@@ -200,6 +209,127 @@ function renderRecordingGrid(recordings) {
         .join("")}
     </div>
   `;
+}
+
+function suggestionHref(result) {
+  return `/songs/${encodeURIComponent(result.slug)}`;
+}
+
+function renderSuggestions(results) {
+  if (results.length === 0) {
+    return '<div class="suggestion-empty">No quick matches. Press Enter for full search.</div>';
+  }
+  return results
+    .map(
+      (result, index) => `
+        <a
+          class="suggestion-item"
+          href="${suggestionHref(result)}"
+          role="option"
+          aria-selected="false"
+          data-suggestion-index="${index}"
+        >
+          <span
+            class="suggestion-art${result.thumbnailUrl || result.artworkUrl ? " has-artwork" : ""}"
+            style="--art-color: ${escapeHtml(result.color)}${
+              result.thumbnailUrl || result.artworkUrl
+                ? `; background-image: url('${escapeHtml(result.thumbnailUrl || result.artworkUrl)}')`
+                : ""
+            }"
+            aria-hidden="true"
+          ></span>
+          <span>
+            <strong>${escapeHtml(result.title)}</strong>
+            <small>${escapeHtml(result.artist)} · ${escapeHtml(result.source || "Catalog")}</small>
+          </span>
+          <span aria-hidden="true">↗</span>
+        </a>
+      `
+    )
+    .join("");
+}
+
+function setupSuggestions(form) {
+  const input = form.querySelector("[data-search-input]");
+  const panel = document.createElement("div");
+  panel.className = "suggestions-panel";
+  panel.setAttribute("role", "listbox");
+  panel.hidden = true;
+  form.append(panel);
+
+  let controller = null;
+  let timer = null;
+  let activeIndex = -1;
+
+  function close() {
+    panel.hidden = true;
+    activeIndex = -1;
+    controller?.abort();
+  }
+
+  function setActive(index) {
+    const items = [...panel.querySelectorAll("[data-suggestion-index]")];
+    if (items.length === 0) return;
+    activeIndex = (index + items.length) % items.length;
+    items.forEach((item, itemIndex) => {
+      const active = itemIndex === activeIndex;
+      item.classList.toggle("is-active", active);
+      item.setAttribute("aria-selected", String(active));
+    });
+  }
+
+  input.addEventListener("input", () => {
+    window.clearTimeout(timer);
+    const query = input.value.trim();
+    if (query.length < 2) {
+      close();
+      return;
+    }
+
+    timer = window.setTimeout(async () => {
+      controller?.abort();
+      controller = new AbortController();
+      try {
+        const response = await fetch(
+          `/api/suggest?q=${encodeURIComponent(query)}`,
+          { signal: controller.signal }
+        );
+        if (!response.ok) return;
+        const body = await response.json();
+        if (input.value.trim() !== query) return;
+        panel.innerHTML = renderSuggestions(body.suggestions);
+        panel.hidden = false;
+        activeIndex = -1;
+      } catch (error) {
+        if (error.name !== "AbortError") close();
+      }
+    }, 220);
+  });
+
+  input.addEventListener("keydown", (event) => {
+    if (panel.hidden) return;
+    const items = [...panel.querySelectorAll("[data-suggestion-index]")];
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActive(activeIndex + 1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActive(activeIndex - 1);
+    } else if (event.key === "Enter" && activeIndex >= 0) {
+      event.preventDefault();
+      route(items[activeIndex].getAttribute("href"));
+      close();
+    } else if (event.key === "Escape") {
+      close();
+    }
+  });
+
+  form.addEventListener("submit", close);
+  form.addEventListener("focusout", () => {
+    window.setTimeout(() => {
+      if (!form.contains(document.activeElement)) close();
+    }, 0);
+  });
 }
 
 async function loadDiscover() {
@@ -535,7 +665,7 @@ async function renderArtist(slug) {
   showView("collection");
   collectionContent.innerHTML = '<div class="loading-state collection-shell">Loading artist…</div>';
   try {
-    const response = await fetch(`/api/artists/${encodeURIComponent(slug)}`);
+    const response = await fetch(artistApiUrl(slug));
     if (!response.ok) throw new Error("Artist request failed");
     const artist = await response.json();
     document.title = `${artist.name} - Liner Notes`;
@@ -545,10 +675,16 @@ async function renderArtist(slug) {
         <h1>${escapeHtml(artist.name)}</h1>
         <p class="collection-summary">${escapeHtml(artist.summary)}</p>
         <div class="collection-meta">
+          <span>${escapeHtml(artist.source || "Liner Notes")}</span>
           <span>${escapeHtml(artist.country)}</span>
           <span>${artist.recordings.length} ${artist.recordings.length === 1 ? "recording" : "recordings"}</span>
           <span>${artist.genres.map(escapeHtml).join(" · ")}</span>
         </div>
+        ${
+          artist.appleMusicUrl
+            ? `<a class="text-link" href="${escapeHtml(artist.appleMusicUrl)}" target="_blank" rel="noreferrer">Open artist in Apple Music <span aria-hidden="true">↗</span></a>`
+            : ""
+        }
       </header>
       <section class="collection-list">
         <span class="section-number">DISCOGRAPHY</span>
@@ -558,6 +694,16 @@ async function renderArtist(slug) {
   } catch {
     renderCollectionError("That artist is not in the catalog.");
   }
+}
+
+function artistApiUrl(slug) {
+  if (slug.startsWith("mbid-")) {
+    return `/api/external-artists/${encodeURIComponent(slug.slice("mbid-".length))}`;
+  }
+  if (slug.startsWith("apple-")) {
+    return `/api/apple-artists/${encodeURIComponent(slug.slice("apple-".length))}`;
+  }
+  return `/api/artists/${encodeURIComponent(slug)}`;
 }
 
 async function renderGenre(slug) {
@@ -717,6 +863,7 @@ function renderRoute() {
 }
 
 for (const form of searchForms) {
+  setupSuggestions(form);
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const query = new FormData(form).get("q").trim();

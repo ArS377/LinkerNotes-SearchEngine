@@ -127,13 +127,51 @@ export async function lookupAppleTrack(id) {
     related: [],
     artist: {
       id: result.artistAppleId,
-      slug: null,
+      slug: result.artistAppleId ? `apple-${result.artistAppleId}` : null,
       name: result.artist,
       country: "Country unavailable",
       summary:
         "This artist is available through Apple’s global catalog but does not yet have a locally enriched profile.",
       sources: ["Apple Music"]
     }
+  };
+}
+
+export async function lookupAppleArtist(id, limit = 50) {
+  const body = await request("lookup", {
+    id,
+    entity: "song",
+    limit: String(limit),
+    sort: "recent",
+    country: "US"
+  });
+  const artist = body.results?.find(
+    (result) => result.wrapperType === "artist"
+  );
+  const tracks = (body.results || [])
+    .filter((result) => result.wrapperType === "track" && result.kind === "song")
+    .map(normalizeAppleResult);
+  if (!artist && tracks.length === 0) throw new Error("Apple artist not found");
+  const first = tracks[0];
+
+  return {
+    id: String(artist?.artistId || id),
+    slug: `apple-${artist?.artistId || id}`,
+    external: true,
+    source: "Apple Music",
+    name: artist?.artistName || first?.artist || "Unknown artist",
+    type: artist?.artistType || "Artist",
+    country: first?.country || "Country unavailable",
+    summary: "Artist profile and recordings from Apple Music’s commercial catalog.",
+    genres: [
+      ...new Set(
+        [artist?.primaryGenreName, ...tracks.flatMap((track) => track.genres)]
+          .filter(Boolean)
+          .map((genre) => genre.toLowerCase())
+      )
+    ],
+    appleMusicUrl: artist?.artistLinkUrl || artist?.artistViewUrl || null,
+    recordings: tracks
   };
 }
 

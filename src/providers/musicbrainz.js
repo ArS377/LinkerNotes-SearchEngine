@@ -1,8 +1,10 @@
 const apiRoot = "https://musicbrainz.org/ws/2";
 const cache = new Map();
+const inFlight = new Map();
 const cacheTtlMs = 10 * 60 * 1000;
 const maxCacheEntries = 200;
 let nextRequestAt = 0;
+let requestQueue = Promise.resolve();
 let fetchImplementation = globalThis.fetch;
 
 function userAgent() {
@@ -27,12 +29,17 @@ function writeCache(key, value) {
   cache.set(key, { createdAt: Date.now(), value });
 }
 
-async function respectRateLimit() {
-  const waitMs = Math.max(0, nextRequestAt - Date.now());
-  if (waitMs > 0) {
-    await new Promise((resolve) => setTimeout(resolve, waitMs));
-  }
-  nextRequestAt = Date.now() + 1100;
+async function withRateLimit(request) {
+  const queued = requestQueue.then(async () => {
+    const waitMs = Math.max(0, nextRequestAt - Date.now());
+    if (waitMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+    nextRequestAt = Date.now() + 1100;
+    return request();
+  });
+  requestQueue = queued.catch(() => {});
+  return queued;
 }
 
 async function requestMusicBrainz(path, params) {
@@ -45,23 +52,31 @@ async function requestMusicBrainz(path, params) {
   const cacheKey = url.toString();
   const cached = readCache(cacheKey);
   if (cached) return cached;
+  if (inFlight.has(cacheKey)) return inFlight.get(cacheKey);
 
-  await respectRateLimit();
-  const response = await fetchImplementation(url, {
-    headers: {
-      accept: "application/json",
-      "user-agent": userAgent()
-    },
-    signal: AbortSignal.timeout(5000)
-  });
+  const pending = withRateLimit(async () => {
+      const response = await fetchImplementation(url, {
+        headers: {
+          accept: "application/json",
+          "user-agent": userAgent()
+        },
+        signal: AbortSignal.timeout(5000)
+      });
 
-  if (!response.ok) {
-    throw new Error(`MusicBrainz returned ${response.status}`);
-  }
-
-  const body = await response.json();
-  writeCache(cacheKey, body);
-  return body;
+      if (!response.ok) {
+        throw new Error(`MusicBrainz returned ${response.status}`);
+      }
+      return response.json();
+    })
+    .then((body) => {
+      writeCache(cacheKey, body);
+      return body;
+    })
+    .finally(() => {
+      inFlight.delete(cacheKey);
+    });
+  inFlight.set(cacheKey, pending);
+  return pending;
 }
 
 function artistCreditText(credits = []) {
@@ -83,6 +98,30 @@ function firstRelease(recording) {
   return recording.releases?.find((release) => release.status === "Official")
     || recording.releases?.[0]
     || null;
+}
+
+function normalizedArtistMetadata(artist) {
+  const urls = artist.relations
+    ?.map((relation) => ({
+      type: relation.type,
+      url: relation.url?.resource
+    }))
+    .filter((relation) => relation.url) || [];
+
+  return {
+    id: artist.id,
+    name: artist.name,
+    sortName: artist["sort-name"] || artist.name,
+    type: artist.type || "Artist",
+    country: artist.country || artist.area?.name || "Country unavailable",
+    lifeSpan: artist["life-span"] || null,
+    disambiguation: artist.disambiguation || null,
+    genres: (artist.genres || [])
+      .sort((left, right) => (right.count || 0) - (left.count || 0))
+      .slice(0, 8)
+      .map((genre) => genre.name),
+    urls
+  };
 }
 
 function formatDuration(length) {
@@ -113,6 +152,7 @@ export function normalizeMusicBrainzResult(recording) {
     artistMusicBrainzId: artist?.id || null,
     album: release?.title || "Release unknown",
     releaseMusicBrainzId: release?.id || null,
+    releaseStatus: release?.status || null,
     releaseDate: release?.date || recording["first-release-date"] || null,
     version: recording.disambiguation || "MusicBrainz recording",
     genres,
@@ -156,6 +196,7 @@ export async function lookupMusicBrainzRecording(id) {
     title: result.title,
     album: result.album,
     releaseMusicBrainzId: result.releaseMusicBrainzId,
+    releaseStatus: result.releaseStatus,
     releaseDate: result.releaseDate,
     duration: result.duration,
     genres: result.genres,
@@ -176,6 +217,7 @@ export async function lookupMusicBrainzRecording(id) {
     credits: [
       ["Artist credit", result.artist],
       ["Release", release?.title || "Unknown"],
+      ["Release status", release?.status || "Unknown"],
       ["MusicBrainz ID", recording.id]
     ],
     chartFacts: [],
@@ -201,11 +243,16 @@ export async function lookupMusicBrainzRecording(id) {
   };
 }
 
+export async function lookupMusicBrainzArtistMetadata(id) {
+  const artist = await requestMusicBrainz(`artist/${encodeURIComponent(id)}`, {
+    inc: "genres+url-rels"
+  });
+  return normalizedArtistMetadata(artist);
+}
+
 export async function lookupMusicBrainzArtist(id, limit = 50) {
   const [artist, recordings] = await Promise.all([
-    requestMusicBrainz(`artist/${encodeURIComponent(id)}`, {
-      inc: "genres+url-rels"
-    }),
+    lookupMusicBrainzArtistMetadata(id),
     requestMusicBrainz("recording", {
       query: `arid:${id}`,
       limit: String(limit),
@@ -216,32 +263,22 @@ export async function lookupMusicBrainzArtist(id, limit = 50) {
   const normalizedRecordings = (recordings.recordings || [])
     .map(normalizeMusicBrainzResult)
     .sort((left, right) => right.score - left.score);
-  const urls = artist.relations
-    ?.map((relation) => ({
-      type: relation.type,
-      url: relation.url?.resource
-    }))
-    .filter((relation) => relation.url) || [];
-
   return {
     id: artist.id,
     slug: `mbid-${artist.id}`,
     external: true,
     source: "MusicBrainz",
     name: artist.name,
-    sortName: artist["sort-name"] || artist.name,
+    sortName: artist.sortName,
     type: artist.type || "Artist",
     country: artist.country || artist.area?.name || "Country unavailable",
-    lifeSpan: artist["life-span"] || null,
+    lifeSpan: artist.lifeSpan,
     disambiguation: artist.disambiguation || null,
     summary:
       artist.disambiguation
       || `${artist.type || "Artist"} profile from the global MusicBrainz catalog.`,
-    genres: (artist.genres || [])
-      .sort((left, right) => (right.count || 0) - (left.count || 0))
-      .slice(0, 8)
-      .map((genre) => genre.name),
-    urls,
+    genres: artist.genres,
+    urls: artist.urls,
     recordings: normalizedRecordings
   };
 }
@@ -249,5 +286,7 @@ export async function lookupMusicBrainzArtist(id, limit = 50) {
 export function setMusicBrainzFetchForTests(fetchFn) {
   fetchImplementation = fetchFn;
   cache.clear();
+  inFlight.clear();
   nextRequestAt = 0;
+  requestQueue = Promise.resolve();
 }

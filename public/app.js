@@ -544,6 +544,27 @@ function renderSourceFacts(song) {
     .join("");
 }
 
+function renderArtistLinks(artist) {
+  const links = [
+    ["Official site", artist.officialUrl],
+    ["Wikipedia", artist.wikipediaUrl],
+    ["Spotify", artist.spotifyUrl],
+    ["Lyrics profile", artist.lyricsUrl]
+  ].filter(([, url]) => url);
+  if (links.length === 0) return "";
+
+  return `
+    <div class="artist-links">
+      ${links
+        .map(
+          ([label, url]) =>
+            `<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${escapeHtml(label)} ↗</a>`
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 function renderSongMarkup(song) {
   const shadow = `${song.color}99`;
   const spotifyHref = song.spotifyUrl || song.spotifySearchUrl;
@@ -625,9 +646,13 @@ function renderSongMarkup(song) {
           <div class="lyrics-unavailable">
             <p>${escapeHtml(song.lyrics.message)}</p>
             <span class="provider-note">
-              We do not scrape or reproduce unlicensed lyrics. Search matching currently
-              uses a tiny evaluation fragment stored for this portfolio demo.
+              We do not scrape or reproduce unlicensed lyrics.
             </span>
+            ${
+              song.lyrics.searchUrl
+                ? `<a class="lyrics-destination" href="${escapeHtml(song.lyrics.searchUrl)}" target="_blank" rel="noreferrer">Search for these lyrics on Genius ↗</a>`
+                : ""
+            }
           </div>
         </section>
 
@@ -639,7 +664,7 @@ function renderSongMarkup(song) {
             song.external
               ? `<div class="enrichment-callout">
                   <strong>Global result</strong>
-                  <span>This page was assembled on demand from MusicBrainz. Credits, lyrics, chart facts, and editorial context may be incomplete until this recording is added to the enriched local index.</span>
+                  <span>This page was assembled on demand from linked open and commercial music sources. Song-specific editorial interpretation and licensed full lyrics may still be unavailable.</span>
                 </div>`
               : ""
           }
@@ -653,9 +678,20 @@ function renderSongMarkup(song) {
         </section>
         <section>
           <h3>About the artist</h3>
+          ${
+            song.artist.imageUrl
+              ? `<img class="artist-image" src="${escapeHtml(song.artist.imageUrl)}" alt="${escapeHtml(song.artist.name)}">`
+              : ""
+          }
           <p><strong>${escapeHtml(song.artist.name)}</strong></p>
           <p class="artist-summary">${escapeHtml(song.artist.summary)}</p>
           <p class="provider-note">${escapeHtml(song.artist.country)}</p>
+          ${
+            song.artist.genres?.length
+              ? `<p class="artist-genres">${song.artist.genres.map(escapeHtml).join(" · ")}</p>`
+              : ""
+          }
+          ${renderArtistLinks(song.artist)}
         </section>
         <section>
           <h3>Listening and chart signals</h3>
@@ -732,6 +768,11 @@ async function renderArtist(slug) {
     collectionContent.innerHTML = `
       <header class="collection-hero">
         <p class="eyebrow">Artist</p>
+        ${
+          artist.imageUrl
+            ? `<img class="collection-artist-image" src="${escapeHtml(artist.imageUrl)}" alt="${escapeHtml(artist.name)}">`
+            : ""
+        }
         <h1>${escapeHtml(artist.name)}</h1>
         <p class="collection-summary">${escapeHtml(artist.summary)}</p>
         <div class="collection-meta">
@@ -745,6 +786,7 @@ async function renderArtist(slug) {
             ? `<a class="text-link" href="${escapeHtml(artist.appleMusicUrl)}" target="_blank" rel="noreferrer">Open artist in Apple Music <span aria-hidden="true">↗</span></a>`
             : ""
         }
+        ${renderArtistLinks(artist)}
       </header>
       <section class="collection-list">
         <span class="section-number">DISCOGRAPHY</span>

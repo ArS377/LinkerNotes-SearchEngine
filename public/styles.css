@@ -936,6 +936,15 @@ main {
   line-height: 1.35;
 }
 
+.lyrics-destination {
+  display: inline-block;
+  margin-top: 24px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid currentColor;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .provider-note {
   color: var(--muted);
   font-size: 0.72rem;
@@ -1013,6 +1022,33 @@ main {
   font-family: var(--serif);
   font-size: 1.15rem;
   line-height: 1.5;
+}
+
+.artist-image {
+  width: min(100%, 260px);
+  max-height: 320px;
+  margin-bottom: 18px;
+  object-fit: cover;
+  filter: saturate(0.8) contrast(1.05);
+}
+
+.artist-genres {
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: capitalize;
+}
+
+.artist-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 18px;
+}
+
+.artist-links a {
+  border-bottom: 1px solid currentColor;
+  font-size: 0.7rem;
+  font-weight: 700;
 }
 
 .chart-fact {
@@ -1139,6 +1175,16 @@ main {
   line-height: 0.8;
   letter-spacing: -0.065em;
   text-transform: capitalize;
+}
+
+.collection-artist-image {
+  position: relative;
+  z-index: 1;
+  width: min(260px, 55vw);
+  max-height: 320px;
+  margin-bottom: 34px;
+  object-fit: cover;
+  filter: saturate(0.8) contrast(1.05);
 }
 
 .collection-summary {

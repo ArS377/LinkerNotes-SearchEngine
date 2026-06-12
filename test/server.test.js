@@ -4,10 +4,38 @@ import { server } from "../src/server.js";
 import { setMusicBrainzFetchForTests } from "../src/providers/musicbrainz.js";
 import { setAppleFetchForTests } from "../src/providers/apple.js";
 import { setCoverArtFetchForTests } from "../src/providers/cover-art.js";
+import { setWikimediaFetchForTests } from "../src/providers/wikimedia.js";
 
 let baseUrl;
 
 before(async () => {
+  setWikimediaFetchForTests(async (url) => {
+    if (String(url).includes("Special:EntityData")) {
+      return {
+        ok: true,
+        json: async () => ({
+          entities: {
+            Q1: {
+              descriptions: { en: { value: "Remote artist" } },
+              sitelinks: { enwiki: { title: "Remote Artist" } }
+            }
+          }
+        })
+      };
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        query: {
+          pages: [{
+            title: "Remote Artist",
+            extract: "Remote Artist is an American recording artist.",
+            thumbnail: { source: "https://example.com/artist.jpg" }
+          }]
+        }
+      })
+    };
+  });
   setCoverArtFetchForTests(async () => ({
     ok: true,
     status: 200,
@@ -58,8 +86,17 @@ before(async () => {
           name: "Remote Artist",
           type: "Person",
           country: "US",
-          genres: [],
-          relations: []
+          genres: [{ name: "hip hop", count: 3 }],
+          relations: [
+            {
+              type: "wikidata",
+              url: { resource: "https://www.wikidata.org/wiki/Q1" }
+            },
+            {
+              type: "lyrics",
+              url: { resource: "https://genius.com/artists/Remote-artist" }
+            }
+          ]
         })
       };
     }
@@ -158,7 +195,11 @@ test("external song endpoint builds a global catalog page", async () => {
   assert.equal(body.previewUrl, "https://example.com/preview.m4a");
   assert.equal(body.artworkUrl, "https://example.com/cover.jpg");
   assert.ok(body.sources.includes("Cover Art Archive"));
+  assert.ok(body.sources.includes("Wikipedia"));
   assert.ok(body.sourceFacts.some((fact) => fact.source === "Apple Music"));
+  assert.match(body.artist.summary, /American recording artist/);
+  assert.equal(body.artist.imageUrl, "https://example.com/artist.jpg");
+  assert.match(body.lyrics.searchUrl, /genius\.com\/search/);
 });
 
 test("Apple song endpoint builds a commercial catalog page", async () => {
@@ -214,6 +255,9 @@ test("global artist routes return provider profiles", async () => {
   const apple = await fetch(`${baseUrl}/api/apple-artists/2`);
   assert.equal(musicBrainz.status, 200);
   assert.equal(apple.status, 200);
+  const musicBrainzBody = await musicBrainz.json();
+  assert.match(musicBrainzBody.summary, /American recording artist/);
+  assert.equal(musicBrainzBody.imageUrl, "https://example.com/artist.jpg");
 });
 
 test("genre endpoint returns matching recordings", async () => {

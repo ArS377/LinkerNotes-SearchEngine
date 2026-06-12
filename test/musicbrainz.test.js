@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   lookupMusicBrainzArtist,
+  lookupMusicBrainzArtistMetadata,
   lookupMusicBrainzRecording,
   searchMusicBrainz,
   setMusicBrainzFetchForTests
@@ -95,4 +96,70 @@ test("builds a global artist profile with recordings", async () => {
   const artist = await lookupMusicBrainzArtist("artist-2");
   assert.equal(artist.name, "Talking Heads");
   assert.equal(artist.recordings[0].title, "Once in a Lifetime");
+});
+
+test("returns artist relationships for page enrichment", async () => {
+  setMusicBrainzFetchForTests(async () => ({
+    ok: true,
+    json: async () => ({
+      id: "artist-3",
+      name: "Example Artist",
+      type: "Person",
+      country: "US",
+      genres: [{ name: "hip hop", count: 4 }],
+      relations: [
+        {
+          type: "wikidata",
+          url: { resource: "https://www.wikidata.org/wiki/Q1" }
+        },
+        {
+          type: "lyrics",
+          url: { resource: "https://genius.com/artists/Example-artist" }
+        }
+      ]
+    })
+  }));
+
+  const artist = await lookupMusicBrainzArtistMetadata("artist-3");
+  assert.equal(artist.genres[0], "hip hop");
+  assert.equal(artist.urls[0].type, "wikidata");
+  assert.equal(artist.urls[1].type, "lyrics");
+});
+
+test("serializes concurrent uncached MusicBrainz requests", async () => {
+  const startedAt = [];
+  setMusicBrainzFetchForTests(async () => {
+    startedAt.push(Date.now());
+    return {
+      ok: true,
+      json: async () => ({ recordings: [], count: 0, offset: 0 })
+    };
+  });
+
+  await Promise.all([
+    searchMusicBrainz("first query"),
+    searchMusicBrainz("second query")
+  ]);
+
+  assert.ok(
+    startedAt[1] - startedAt[0] >= 1000,
+    `Expected serialized requests, received ${startedAt[1] - startedAt[0]}ms`
+  );
+});
+
+test("coalesces identical concurrent MusicBrainz requests", async () => {
+  let requestCount = 0;
+  setMusicBrainzFetchForTests(async () => {
+    requestCount += 1;
+    return {
+      ok: true,
+      json: async () => ({ recordings: [], count: 0, offset: 0 })
+    };
+  });
+
+  await Promise.all([
+    searchMusicBrainz("same query"),
+    searchMusicBrainz("same query")
+  ]);
+  assert.equal(requestCount, 1);
 });

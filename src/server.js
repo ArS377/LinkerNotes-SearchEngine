@@ -13,6 +13,7 @@ import { federatedSearch } from "./federated-search.js";
 import { searchRecordings } from "./search.js";
 import {
   lookupMusicBrainzArtist,
+  lookupMusicBrainzArtistMetadata,
   lookupMusicBrainzRecording
 } from "./providers/musicbrainz.js";
 import {
@@ -22,6 +23,7 @@ import {
 } from "./providers/apple.js";
 import { resolveSpotifyTrack } from "./providers/spotify.js";
 import { lookupCoverArt } from "./providers/cover-art.js";
+import { lookupWikimediaArtist } from "./providers/wikimedia.js";
 import {
   audioIdentificationConfigured,
   identifyAudio
@@ -254,7 +256,28 @@ async function handleRequest(request, response) {
       url.pathname.slice("/api/external-artists/".length)
     );
     try {
-      sendJson(response, 200, await lookupMusicBrainzArtist(id));
+      const artist = await lookupMusicBrainzArtist(id);
+      const wikidataUrl = artist.urls.find(
+        (relation) => relation.type === "wikidata"
+      )?.url;
+      const wikimedia = await lookupWikimediaArtist(wikidataUrl).catch(() => null);
+      const relationUrl = (type, predicate = () => true) =>
+        artist.urls.find(
+          (relation) => relation.type === type && predicate(relation.url)
+        )?.url || null;
+      Object.assign(artist, {
+        summary: wikimedia?.summary || artist.summary,
+        imageUrl: wikimedia?.imageUrl || null,
+        wikipediaUrl: wikimedia?.wikipediaUrl || null,
+        wikidataUrl: wikimedia?.wikidataUrl || wikidataUrl || null,
+        officialUrl: relationUrl("official homepage"),
+        spotifyUrl: relationUrl(
+          "free streaming",
+          (value) => value.startsWith("https://open.spotify.com/artist/")
+        ),
+        lyricsUrl: relationUrl("lyrics")
+      });
+      sendJson(response, 200, artist);
     } catch {
       sendJson(response, 502, { error: "Global artist lookup unavailable" });
     }
@@ -299,6 +322,77 @@ async function handleRequest(request, response) {
     );
     try {
       const recording = await lookupMusicBrainzRecording(id);
+      const artistMetadata = recording.artist.id
+        ? await lookupMusicBrainzArtistMetadata(recording.artist.id).catch(() => null)
+        : null;
+      if (artistMetadata) {
+        const wikidataUrl = artistMetadata.urls.find(
+          (relation) => relation.type === "wikidata"
+        )?.url;
+        const wikimedia = await lookupWikimediaArtist(wikidataUrl).catch(() => null);
+        const lyricsArtistUrl = artistMetadata.urls.find(
+          (relation) => relation.type === "lyrics"
+        )?.url;
+        const officialUrl = artistMetadata.urls.find(
+          (relation) => relation.type === "official homepage"
+        )?.url;
+        const spotifyArtistUrl = artistMetadata.urls.find(
+          (relation) =>
+            relation.url.startsWith("https://open.spotify.com/artist/")
+        )?.url;
+
+        recording.artist = {
+          ...recording.artist,
+          country: artistMetadata.country,
+          genres: artistMetadata.genres,
+          summary:
+            wikimedia?.summary
+            || artistMetadata.disambiguation
+            || `${artistMetadata.type} whose MusicBrainz profile lists ${artistMetadata.genres.join(", ")}.`,
+          imageUrl: wikimedia?.imageUrl || null,
+          wikipediaUrl: wikimedia?.wikipediaUrl || null,
+          wikidataUrl: wikimedia?.wikidataUrl || wikidataUrl || null,
+          officialUrl: officialUrl || null,
+          spotifyUrl: spotifyArtistUrl || null,
+          lyricsUrl: lyricsArtistUrl || null
+        };
+        recording.genres = recording.genres.length
+          ? recording.genres
+          : artistMetadata.genres;
+        recording.lyrics = {
+          ...recording.lyrics,
+          searchUrl: `https://genius.com/search?q=${encodeURIComponent(
+            `${recording.title} ${recording.artist.name}`
+          )}`,
+          artistUrl: lyricsArtistUrl || null
+        };
+        const releaseDescription = recording.releaseStatus
+          ? `${recording.releaseStatus.toLowerCase()} release`
+          : "release";
+        recording.story = [
+          `“${recording.title}” is a recording credited to ${recording.artist.name}.`,
+          recording.album !== "Release unknown"
+            ? `MusicBrainz associates it with the ${releaseDescription} “${recording.album}”${recording.releaseDate ? `, dated ${recording.releaseDate}` : ""}.`
+            : null,
+          recording.genres.length
+            ? `${recording.artist.name} is associated with ${recording.genres.join(", ")}.`
+            : null
+        ].filter(Boolean).join(" ");
+        recording.sources = [
+          ...new Set([
+            ...recording.sources,
+            ...(wikimedia ? [wikimedia.source, "Wikidata"] : [])
+          ])
+        ];
+        if (wikimedia) {
+          recording.sourceFacts.push({
+            source: wikimedia.source,
+            fields: ["artist biography", "artist image"],
+            retrievedAt: new Date().toISOString(),
+            confidence: "linked from MusicBrainz via Wikidata"
+          });
+        }
+      }
       const coverArt = await lookupCoverArt(
         recording.releaseMusicBrainzId
       ).catch(() => null);

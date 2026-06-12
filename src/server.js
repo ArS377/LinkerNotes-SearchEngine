@@ -85,7 +85,7 @@ async function sendStatic(response, pathname) {
   }
 }
 
-export const server = createServer(async (request, response) => {
+async function handleRequest(request, response) {
   const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
 
   if (url.pathname === "/api/capabilities") {
@@ -356,6 +356,16 @@ export const server = createServer(async (request, response) => {
   }
 
   await sendStatic(response, url.pathname);
+}
+
+export const server = createServer((request, response) => {
+  handleRequest(request, response).catch(() => {
+    if (response.headersSent) {
+      response.destroy();
+      return;
+    }
+    sendJson(response, 500, { error: "Internal server error" });
+  });
 });
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

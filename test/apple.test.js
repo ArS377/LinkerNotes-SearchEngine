@@ -71,3 +71,40 @@ test("builds an Apple artist profile with recordings", async () => {
   assert.equal(artist.name, "Talking Heads");
   assert.equal(artist.recordings[0].title, "Once In a Lifetime");
 });
+
+test("filters duplicate and unreleased artist recordings", async () => {
+  setAppleFetchForTests(async () => ({
+    ok: true,
+    json: async () => ({
+      resultCount: 4,
+      results: [
+        {
+          wrapperType: "artist",
+          artistType: "Artist",
+          artistId: 155546,
+          artistName: "Talking Heads"
+        },
+        { ...track, wrapperType: "track", kind: "song" },
+        {
+          ...track,
+          trackId: 2,
+          collectionName: "Compilation",
+          wrapperType: "track",
+          kind: "song"
+        },
+        {
+          ...track,
+          trackId: 3,
+          trackName: "Future Song",
+          releaseDate: "2999-01-01T00:00:00Z",
+          wrapperType: "track",
+          kind: "song"
+        }
+      ]
+    })
+  }));
+
+  const artist = await lookupAppleArtist("155546");
+  assert.equal(artist.recordings.length, 1);
+  assert.equal(artist.recordings[0].title, "Once In a Lifetime");
+});

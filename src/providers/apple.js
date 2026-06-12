@@ -1,6 +1,7 @@
 const apiRoot = "https://itunes.apple.com";
 const cache = new Map();
 const cacheTtlMs = 10 * 60 * 1000;
+const maxCacheEntries = 200;
 let fetchImplementation = globalThis.fetch;
 
 function formatDuration(length) {
@@ -23,6 +24,7 @@ function normalizeAppleResult(track) {
     title: track.trackName,
     artist: track.artistName,
     artistAppleId: String(track.artistId),
+    country: track.country || null,
     album: track.collectionName || "Release unknown",
     releaseDate: track.releaseDate?.slice(0, 10) || null,
     version: track.trackCensoredName !== track.trackName
@@ -60,6 +62,9 @@ async function request(path, params) {
   });
   if (!response.ok) throw new Error(`Apple Search API returned ${response.status}`);
   const value = await response.json();
+  if (cache.size >= maxCacheEntries) {
+    cache.delete(cache.keys().next().value);
+  }
   cache.set(key, { createdAt: Date.now(), value });
   return value;
 }
@@ -148,9 +153,19 @@ export async function lookupAppleArtist(id, limit = 50) {
   const artist = body.results?.find(
     (result) => result.wrapperType === "artist"
   );
+  const seenTitles = new Set();
+  const today = new Date().toISOString().slice(0, 10);
   const tracks = (body.results || [])
     .filter((result) => result.wrapperType === "track" && result.kind === "song")
-    .map(normalizeAppleResult);
+    .map(normalizeAppleResult)
+    .filter((track) => {
+      if (track.releaseDate && track.releaseDate > today) return false;
+      const title = track.title.toLocaleLowerCase("en-US");
+      if (seenTitles.has(title)) return false;
+      seenTitles.add(title);
+      return true;
+    })
+    .slice(0, 24);
   if (!artist && tracks.length === 0) throw new Error("Apple artist not found");
   const first = tracks[0];
 

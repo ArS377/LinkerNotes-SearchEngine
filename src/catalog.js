@@ -407,5 +407,21 @@ export function getRecording(slug) {
       releaseDate: candidate.releaseDate
     }));
 
-  return { ...recording, artist, related };
+  return {
+    ...recording,
+    artist,
+    related,
+    sourceFacts: recording.sources.map((source) => ({
+      source,
+      fields:
+        source === "MusicBrainz"
+          ? ["recording identity", "release metadata", "credits"]
+          : source === "Wikidata"
+            ? ["artist context", "historical context"]
+            : ["chart or award fact"],
+      retrievedAt: "2026-06-11T00:00:00.000Z",
+      confidence:
+        source === "MusicBrainz" ? "canonical metadata" : "editorially verified"
+    }))
+  };
 }

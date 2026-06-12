@@ -492,6 +492,49 @@ function renderRelated(related) {
   `;
 }
 
+function correctionUrl(song) {
+  const title = `Correction: ${song.title} by ${song.artist.name}`;
+  const body = [
+    "## Recording",
+    `- Title: ${song.title}`,
+    `- Artist: ${song.artist.name}`,
+    `- Page: ${window.location.href}`,
+    song.musicBrainzId ? `- MusicBrainz ID: ${song.musicBrainzId}` : null,
+    song.appleTrackId ? `- Apple track ID: ${song.appleTrackId}` : null,
+    "",
+    "## What should be corrected?",
+    "",
+    "Describe the incorrect field and include a reliable source."
+  ].filter((line) => line !== null).join("\n");
+  return `https://github.com/ArS377/SearchEngine/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}&labels=data-correction`;
+}
+
+function renderSourceFacts(song) {
+  const facts = song.sourceFacts?.length
+    ? song.sourceFacts
+    : song.sources.map((source) => ({
+        source,
+        fields: ["recording metadata"],
+        confidence: "attributed source",
+        retrievedAt: null
+      }));
+
+  return facts
+    .map(
+      (fact) => `
+        <li class="source-fact">
+          <strong>${escapeHtml(fact.source)}</strong>
+          <span>${fact.fields.map(escapeHtml).join(" · ")}</span>
+          <small>
+            ${escapeHtml(fact.confidence)}
+            ${fact.retrievedAt ? ` · retrieved ${formatDate(fact.retrievedAt)}` : ""}
+          </small>
+        </li>
+      `
+    )
+    .join("");
+}
+
 function renderSongMarkup(song) {
   const shadow = `${song.color}99`;
   const spotifyHref = song.spotifyUrl || song.spotifySearchUrl;
@@ -614,7 +657,15 @@ function renderSongMarkup(song) {
         </section>
         <section>
           <h3>Sources</h3>
-          <p class="sources-list">${song.sources.map(escapeHtml).join(" · ")}</p>
+          <ul class="source-facts">${renderSourceFacts(song)}</ul>
+          <a
+            class="correction-link"
+            href="${escapeHtml(correctionUrl(song))}"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Report a data correction ↗
+          </a>
         </section>
       </aside>
     </div>

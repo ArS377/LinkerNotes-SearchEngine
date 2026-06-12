@@ -173,6 +173,7 @@ test("song endpoint returns canonical artist and related versions", async () => 
   const body = await response.json();
   assert.equal(body.artist.name, "Taylor Swift");
   assert.equal(body.related[0].slug, "love-story-taylors-version");
+  assert.ok(body.sourceFacts.some((fact) => fact.source === "MusicBrainz"));
 });
 
 test("song endpoint returns 404 for unknown slugs", async () => {

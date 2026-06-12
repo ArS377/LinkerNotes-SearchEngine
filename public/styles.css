@@ -1022,6 +1022,39 @@ main {
   font-size: 0.7rem;
 }
 
+.source-facts {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  margin: 0 0 18px;
+  list-style: none;
+}
+
+.source-fact {
+  display: grid;
+  gap: 3px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.source-fact strong {
+  font-size: 0.78rem;
+}
+
+.source-fact span,
+.source-fact small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.correction-link {
+  display: inline-block;
+  border-bottom: 1px solid currentColor;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 .related-section {
   padding: 0 8vw 100px;
 }

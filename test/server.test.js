@@ -3,10 +3,24 @@ import assert from "node:assert/strict";
 import { server } from "../src/server.js";
 import { setMusicBrainzFetchForTests } from "../src/providers/musicbrainz.js";
 import { setAppleFetchForTests } from "../src/providers/apple.js";
+import { setCoverArtFetchForTests } from "../src/providers/cover-art.js";
 
 let baseUrl;
 
 before(async () => {
+  setCoverArtFetchForTests(async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      images: [
+        {
+          front: true,
+          image: "https://example.com/cover.jpg",
+          thumbnails: { "500": "https://example.com/cover-500.jpg" }
+        }
+      ]
+    })
+  }));
   setAppleFetchForTests(async (url) => {
     const isLookup = String(url).includes("/lookup");
     return {
@@ -58,7 +72,12 @@ before(async () => {
           "artist-credit": [
             { name: "Remote Artist", artist: { id: "remote-artist", name: "Remote Artist" } }
           ],
-          releases: [{ title: "Remote Album", status: "Official", date: "2024" }]
+          releases: [{
+            id: "remote-release",
+            title: "Remote Album",
+            status: "Official",
+            date: "2024"
+          }]
         })
       };
     }
@@ -127,6 +146,9 @@ test("external song endpoint builds a global catalog page", async () => {
   assert.equal(body.external, true);
   assert.equal(body.appleMusicUrl, "https://music.apple.com/track");
   assert.equal(body.previewUrl, "https://example.com/preview.m4a");
+  assert.equal(body.artworkUrl, "https://example.com/cover.jpg");
+  assert.ok(body.sources.includes("Cover Art Archive"));
+  assert.ok(body.sourceFacts.some((fact) => fact.source === "Apple Music"));
 });
 
 test("Apple song endpoint builds a commercial catalog page", async () => {

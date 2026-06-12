@@ -129,6 +129,14 @@ export async function lookupAppleTrack(id) {
     ],
     chartFacts: [],
     sources: ["Apple Music"],
+    sourceFacts: [
+      {
+        source: "Apple Music",
+        fields: ["playback link", "preview", "artwork", "release metadata"],
+        retrievedAt: new Date().toISOString(),
+        confidence: "provider metadata"
+      }
+    ],
     related: [],
     artist: {
       id: result.artistAppleId,

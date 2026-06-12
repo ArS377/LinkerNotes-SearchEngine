@@ -21,6 +21,7 @@ import {
   searchAppleMusic
 } from "./providers/apple.js";
 import { resolveSpotifyTrack } from "./providers/spotify.js";
+import { lookupCoverArt } from "./providers/cover-art.js";
 import {
   audioIdentificationConfigured,
   identifyAudio
@@ -277,6 +278,25 @@ async function handleRequest(request, response) {
     );
     try {
       const recording = await lookupMusicBrainzRecording(id);
+      const coverArt = await lookupCoverArt(
+        recording.releaseMusicBrainzId
+      ).catch(() => null);
+      if (coverArt) {
+        Object.assign(recording, {
+          artworkUrl: coverArt.artworkUrl,
+          thumbnailUrl: coverArt.thumbnailUrl,
+          sources: [...new Set([...recording.sources, coverArt.source])],
+          sourceFacts: [
+            ...recording.sourceFacts,
+            {
+              source: coverArt.source,
+              fields: ["release artwork"],
+              retrievedAt: new Date().toISOString(),
+              confidence: "release-linked metadata"
+            }
+          ]
+        });
+      }
       const applePayload = await searchAppleMusic(
         `${recording.title} ${recording.artist.name}`,
         5
@@ -292,9 +312,16 @@ async function handleRequest(request, response) {
           appleTrackId: exactApple.appleTrackId,
           appleMusicUrl: exactApple.appleMusicUrl,
           previewUrl: exactApple.previewUrl,
-          artworkUrl: exactApple.artworkUrl,
+          artworkUrl: recording.artworkUrl || exactApple.artworkUrl,
           isStreamable: exactApple.isStreamable,
           providers: ["MusicBrainz", "Apple Music"]
+        });
+        recording.sources = [...new Set([...recording.sources, "Apple Music"])];
+        recording.sourceFacts.push({
+          source: "Apple Music",
+          fields: ["playback link", "preview", "artwork"],
+          retrievedAt: new Date().toISOString(),
+          confidence: "title and artist match"
         });
       }
       if (!recording.spotifyUrl) {

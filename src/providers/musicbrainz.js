@@ -112,6 +112,7 @@ export function normalizeMusicBrainzResult(recording) {
     artist: artistCreditText(recording["artist-credit"]) || "Unknown artist",
     artistMusicBrainzId: artist?.id || null,
     album: release?.title || "Release unknown",
+    releaseMusicBrainzId: release?.id || null,
     releaseDate: release?.date || recording["first-release-date"] || null,
     version: recording.disambiguation || "MusicBrainz recording",
     genres,
@@ -154,6 +155,7 @@ export async function lookupMusicBrainzRecording(id) {
     musicBrainzId: recording.id,
     title: result.title,
     album: result.album,
+    releaseMusicBrainzId: result.releaseMusicBrainzId,
     releaseDate: result.releaseDate,
     duration: result.duration,
     genres: result.genres,
@@ -178,6 +180,14 @@ export async function lookupMusicBrainzRecording(id) {
     ],
     chartFacts: [],
     sources: ["MusicBrainz"],
+    sourceFacts: [
+      {
+        source: "MusicBrainz",
+        fields: ["identity", "artist credit", "release", "duration", "genres"],
+        retrievedAt: new Date().toISOString(),
+        confidence: "canonical metadata"
+      }
+    ],
     related: [],
     artist: {
       id: artist?.id || null,

@@ -156,6 +156,27 @@ async function handleRequest(request, response) {
     return;
   }
 
+  if (url.pathname === "/api/status") {
+    sendJson(response, 200, {
+      status: "ok",
+      version: "0.1.0",
+      uptimeSeconds: Math.round(process.uptime()),
+      providers: {
+        musicBrainz: "enabled",
+        appleMusic: "enabled",
+        coverArtArchive: "enabled",
+        spotify: process.env.SPOTIFY_CLIENT_ID
+          && process.env.SPOTIFY_CLIENT_SECRET
+          ? "configured"
+          : "search-fallback",
+        audioIdentification: audioIdentificationConfigured()
+          ? "configured"
+          : "not-configured"
+      }
+    });
+    return;
+  }
+
   if (url.pathname === "/api/search") {
     const query = url.searchParams.get("q") || "";
     const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") || "0", 10) || 0);

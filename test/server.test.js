@@ -100,6 +100,16 @@ test("health endpoint reports readiness", async () => {
   assert.deepEqual(await response.json(), { status: "ok" });
 });
 
+test("status endpoint reports runtime and provider modes", async () => {
+  const response = await fetch(`${baseUrl}/api/status`);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "ok");
+  assert.equal(body.providers.musicBrainz, "enabled");
+  assert.equal(body.providers.appleMusic, "enabled");
+  assert.equal(typeof body.uptimeSeconds, "number");
+});
+
 test("capabilities endpoint reports configured product features", async () => {
   const response = await fetch(`${baseUrl}/api/capabilities`);
   const body = await response.json();

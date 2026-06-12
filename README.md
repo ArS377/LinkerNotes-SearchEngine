@@ -57,3 +57,15 @@ npm test
 The suite covers local relevance, provider normalization, artist profiles, search
 suggestions, federated deduplication, provider outages, exact/fallback playback
 links, audio identification signing, HTTP routes, and static asset behavior.
+
+## Deploy
+
+The repository includes a non-root production container and GitHub Actions checks.
+
+```bash
+docker build -t liner-notes-search .
+docker run --rm -p 3000:3000 --env-file .env liner-notes-search
+```
+
+Use `/api/health` for readiness probes and `/api/status` for runtime and provider
+configuration diagnostics. Secrets remain server-side environment variables.

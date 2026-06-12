@@ -1,0 +1,16 @@
+.git
+.github
+.claude
+.codex
+.gstack
+.agents
+docs
+test
+.env
+.env.*
+node_modules
+coverage
+*.log
+CLAUDE.md
+AGENTS.md
+GPT*.md

@@ -249,12 +249,16 @@ function renderSuggestions(results) {
     .join("");
 }
 
-function setupSuggestions(form) {
+function setupSuggestions(form, formIndex) {
   const input = form.querySelector("[data-search-input]");
   const panel = document.createElement("div");
+  panel.id = `search-suggestions-${formIndex}`;
   panel.className = "suggestions-panel";
   panel.setAttribute("role", "listbox");
   panel.hidden = true;
+  input.setAttribute("aria-autocomplete", "list");
+  input.setAttribute("aria-controls", panel.id);
+  input.setAttribute("aria-expanded", "false");
   form.append(panel);
 
   let controller = null;
@@ -263,6 +267,8 @@ function setupSuggestions(form) {
 
   function close() {
     panel.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
     activeIndex = -1;
     controller?.abort();
   }
@@ -275,6 +281,8 @@ function setupSuggestions(form) {
       const active = itemIndex === activeIndex;
       item.classList.toggle("is-active", active);
       item.setAttribute("aria-selected", String(active));
+      item.id = `${panel.id}-option-${itemIndex}`;
+      if (active) input.setAttribute("aria-activedescendant", item.id);
     });
   }
 
@@ -299,6 +307,7 @@ function setupSuggestions(form) {
         if (input.value.trim() !== query) return;
         panel.innerHTML = renderSuggestions(body.suggestions);
         panel.hidden = false;
+        input.setAttribute("aria-expanded", "true");
         activeIndex = -1;
       } catch (error) {
         if (error.name !== "AbortError") close();
@@ -913,8 +922,8 @@ function renderRoute() {
   loadDiscover();
 }
 
-for (const form of searchForms) {
-  setupSuggestions(form);
+for (const [formIndex, form] of searchForms.entries()) {
+  setupSuggestions(form, formIndex);
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const query = new FormData(form).get("q").trim();
@@ -995,10 +1004,20 @@ document.addEventListener("click", (event) => {
     };
     if (navigator.share) {
       navigator.share(shareData).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(window.location.href)
+        .then(() => showToast("Link copied"))
+        .catch(() => showToast("Copy failed"));
     } else {
-      navigator.clipboard.writeText(window.location.href).then(() => {
-        showToast("Link copied");
-      });
+      const field = document.createElement("textarea");
+      field.value = window.location.href;
+      field.setAttribute("readonly", "");
+      field.className = "clipboard-field";
+      document.body.append(field);
+      field.select();
+      const copied = document.execCommand("copy");
+      field.remove();
+      showToast(copied ? "Link copied" : "Copy failed");
     }
     return;
   }

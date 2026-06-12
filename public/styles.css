@@ -51,6 +51,16 @@ a {
   text-decoration: none;
 }
 
+:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 4px;
+}
+
+.clipboard-field {
+  position: fixed;
+  left: -9999px;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1053,6 +1063,21 @@ main {
   border-bottom: 1px solid currentColor;
   font-size: 0.72rem;
   font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 .related-section {

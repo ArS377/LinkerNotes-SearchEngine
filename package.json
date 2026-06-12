@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node --watch src/start.js",
     "start": "node src/start.js",
-    "test": "node --test"
+    "test": "node --test",
+    "test:relevance": "node --test test/relevance.test.js"
   },
   "engines": {
     "node": ">=22"

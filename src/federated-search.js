@@ -1,6 +1,7 @@
 import { searchRecordings, normalize } from "./search.js";
 import { searchMusicBrainz } from "./providers/musicbrainz.js";
 import { searchAppleMusic } from "./providers/apple.js";
+import { searchSpotifyTracks } from "./providers/spotify.js";
 
 function dedupeKey(result) {
   return normalize(`${result.title} ${result.artist}`);
@@ -49,6 +50,11 @@ function mergeProviderResult(primary, secondary) {
     previewUrl: primary.previewUrl || secondary.previewUrl,
     artworkUrl: primary.artworkUrl || secondary.artworkUrl,
     thumbnailUrl: primary.thumbnailUrl || secondary.thumbnailUrl,
+    spotifyId: primary.spotifyId || secondary.spotifyId,
+    spotifyUrl: primary.spotifyUrl || secondary.spotifyUrl,
+    spotifyPopularity:
+      primary.spotifyPopularity ?? secondary.spotifyPopularity ?? null,
+    isrc: primary.isrc || secondary.isrc,
     duration: primary.duration || secondary.duration,
     genres: primary.genres?.length ? primary.genres : secondary.genres
   };
@@ -59,6 +65,7 @@ export async function federatedSearch(
   {
     musicBrainzSearch = searchMusicBrainz,
     appleSearch = searchAppleMusic,
+    spotifySearch = searchSpotifyTracks,
     limit = 20,
     offset = 0
   } = {}
@@ -69,9 +76,12 @@ export async function federatedSearch(
     external: false
   }));
 
-  const [musicBrainzResponse, appleResponse] = await Promise.allSettled([
+  const [musicBrainzResponse, appleResponse, spotifyResponse] = await Promise.allSettled([
     musicBrainzSearch(query, limit, offset),
-    appleSearch(query, limit, offset)
+    appleSearch(query, limit, offset),
+    offset === 0
+      ? spotifySearch(query, limit)
+      : Promise.resolve({ results: [], configured: true })
   ]);
   const musicBrainzPayload = musicBrainzResponse.status === "fulfilled"
     ? musicBrainzResponse.value
@@ -85,9 +95,21 @@ export async function federatedSearch(
   const apple = Array.isArray(applePayload)
     ? applePayload
     : applePayload.results;
+  const spotifyPayload = spotifyResponse.status === "fulfilled"
+    ? spotifyResponse.value
+    : { results: [], configured: true };
+  const spotify = Array.isArray(spotifyPayload)
+    ? spotifyPayload
+    : spotifyPayload.results;
   const providerStatus = {
     musicBrainz: musicBrainzResponse.status === "fulfilled" ? "ok" : "unavailable",
-    apple: appleResponse.status === "fulfilled" ? "ok" : "unavailable"
+    apple: appleResponse.status === "fulfilled" ? "ok" : "unavailable",
+    spotify:
+      spotifyResponse.status === "rejected"
+        ? "unavailable"
+        : spotifyPayload.configured === false
+          ? "not-configured"
+          : "ok"
   };
 
   const remoteMap = new Map();
@@ -97,6 +119,11 @@ export async function federatedSearch(
     remoteMap.set(key, existing ? mergeProviderResult(existing, result) : result);
   }
   const remote = [...remoteMap.values()];
+  const spotifyByKey = new Map(spotify.map((result) => [dedupeKey(result), result]));
+  for (const result of remote) {
+    const spotifyResult = spotifyByKey.get(dedupeKey(result));
+    if (spotifyResult) Object.assign(result, mergeProviderResult(result, spotifyResult));
+  }
 
   const localByKey = new Map(local.map((result) => [dedupeKey(result), result]));
   for (const result of remote) {
@@ -121,8 +148,15 @@ export async function federatedSearch(
 
   const results = [...enrichedLocal, ...uniqueRemote]
     .sort(
-      (left, right) =>
-        unifiedRelevance(query, right) - unifiedRelevance(query, left)
+      (left, right) => {
+        const relevanceDifference =
+          unifiedRelevance(query, right) - unifiedRelevance(query, left);
+        if (Math.abs(relevanceDifference) >= 100) return relevanceDifference;
+        return (
+          Number(right.spotifyPopularity ?? -1)
+          - Number(left.spotifyPopularity ?? -1)
+        ) || relevanceDifference;
+      }
     )
     .slice(0, limit);
 
@@ -130,11 +164,10 @@ export async function federatedSearch(
     results,
     localCount: enrichedLocal.length,
     globalCount: uniqueRemote.length,
-    remoteStatus: Object.values(providerStatus).every((status) => status === "unavailable")
-      ? "unavailable"
-      : "ok",
-    providerStatus
-    ,
+    remoteStatus: Object.values(providerStatus).some((status) => status === "ok")
+      ? "ok"
+      : "unavailable",
+    providerStatus,
     offset,
     nextOffset: offset + limit,
     hasMore:

@@ -111,6 +111,49 @@ test("merges Apple playback data into an equivalent MusicBrainz result", async (
   assert.deepEqual(result.results[0].providers, ["MusicBrainz", "Apple Music"]);
 });
 
+test("uses Spotify popularity to order similarly relevant results", async () => {
+  const result = await federatedSearch("Orbit", {
+    musicBrainzSearch: async () => [
+      {
+        slug: "mbid-orbit-one",
+        title: "Orbit One",
+        artist: "First Artist",
+        source: "MusicBrainz",
+        external: true
+      },
+      {
+        slug: "mbid-orbit-two",
+        title: "Orbit Two",
+        artist: "Second Artist",
+        source: "MusicBrainz",
+        external: true
+      }
+    ],
+    appleSearch: async () => [],
+    spotifySearch: async () => ({
+      configured: true,
+      results: [
+        {
+          title: "Orbit One",
+          artist: "First Artist",
+          spotifyPopularity: 35,
+          spotifyUrl: "https://open.spotify.com/track/one"
+        },
+        {
+          title: "Orbit Two",
+          artist: "Second Artist",
+          spotifyPopularity: 88,
+          spotifyUrl: "https://open.spotify.com/track/two"
+        }
+      ]
+    })
+  });
+
+  assert.equal(result.results[0].slug, "mbid-orbit-two");
+  assert.equal(result.results[0].spotifyPopularity, 88);
+  assert.equal(result.providerStatus.spotify, "ok");
+});
+
 test("a strong global title match outranks a weak local artist match", async () => {
   const result = await federatedSearch("Not Like Us Kendrick Lamar", {
     musicBrainzSearch: async () => [

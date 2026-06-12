@@ -5,6 +5,20 @@ export function spotifySearchUrl(title, artist) {
   return `https://open.spotify.com/search/${encodeURIComponent(`${title} ${artist}`)}`;
 }
 
+function normalizeTrack(track) {
+  return {
+    source: "Spotify",
+    spotifyId: track.id || null,
+    spotifyUrl: track.external_urls?.spotify || null,
+    title: track.name,
+    artist: track.artists?.[0]?.name || "Unknown artist",
+    spotifyPopularity: Number.isFinite(track.popularity)
+      ? track.popularity
+      : null,
+    isrc: track.external_ids?.isrc || null
+  };
+}
+
 async function accessToken() {
   const clientId = process.env.SPOTIFY_CLIENT_ID;
   const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
@@ -38,7 +52,10 @@ async function accessToken() {
 export async function resolveSpotifyTrack(title, artist) {
   const fallback = {
     spotifyUrl: null,
-    spotifySearchUrl: spotifySearchUrl(title, artist)
+    spotifySearchUrl: spotifySearchUrl(title, artist),
+    spotifyPopularity: null,
+    spotifyId: null,
+    isrc: null
   };
   const token = await accessToken();
   if (!token) return fallback;
@@ -64,9 +81,35 @@ export async function resolveSpotifyTrack(title, artist) {
       )
   );
   const track = exact || body.tracks?.items?.[0];
+  const normalized = track ? normalizeTrack(track) : null;
   return {
-    spotifyUrl: track?.external_urls?.spotify || null,
-    spotifySearchUrl: fallback.spotifySearchUrl
+    ...fallback,
+    spotifyUrl: normalized?.spotifyUrl || null,
+    spotifyPopularity: normalized?.spotifyPopularity ?? null,
+    spotifyId: normalized?.spotifyId || null,
+    isrc: normalized?.isrc || null
+  };
+}
+
+export async function searchSpotifyTracks(query, limit = 20) {
+  const token = await accessToken();
+  if (!token) return { results: [], configured: false };
+
+  const url = new URL("https://api.spotify.com/v1/search");
+  url.searchParams.set("q", query);
+  url.searchParams.set("type", "track");
+  url.searchParams.set("limit", String(Math.min(limit, 50)));
+  url.searchParams.set("market", "US");
+
+  const response = await fetchImplementation(url, {
+    headers: { authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(5000)
+  });
+  if (!response.ok) throw new Error(`Spotify returned ${response.status}`);
+  const body = await response.json();
+  return {
+    results: (body.tracks?.items || []).map(normalizeTrack),
+    configured: true
   };
 }
 

@@ -152,6 +152,37 @@ function localApplePreviewUrl(trackId) {
   return trackId ? `/api/apple-previews/${encodeURIComponent(trackId)}` : null;
 }
 
+function addSpotifyPopularity(recording, spotify) {
+  Object.assign(recording, spotify);
+  if (!Number.isFinite(spotify.spotifyPopularity)) return recording;
+  recording.chartFacts = [
+    ...(recording.chartFacts || []).filter(
+      (fact) => fact.label !== "Spotify popularity"
+    ),
+    {
+      label: "Spotify popularity",
+      value: `${spotify.spotifyPopularity} / 100`,
+      asOf: new Date().toISOString().slice(0, 10),
+      source: "Spotify",
+      description:
+        "An algorithmic score influenced by total and recent plays; it is not a lifetime stream count."
+    }
+  ];
+  recording.sources = [...new Set([...(recording.sources || []), "Spotify"])];
+  recording.sourceFacts = [
+    ...(recording.sourceFacts || []).filter(
+      (fact) => fact.source !== "Spotify"
+    ),
+    {
+      source: "Spotify",
+      fields: ["track link", "popularity score"],
+      retrievedAt: new Date().toISOString(),
+      confidence: "matched track metadata"
+    }
+  ];
+  return recording;
+}
+
 function sendJson(response, status, body) {
   response.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
@@ -537,12 +568,10 @@ async function handleRequest(request, response) {
           confidence: "title and artist match"
         });
       }
-      if (!recording.spotifyUrl) {
-        Object.assign(
-          recording,
-          await resolveSpotifyTrack(recording.title, recording.artist.name)
-        );
-      }
+      addSpotifyPopularity(
+        recording,
+        await resolveSpotifyTrack(recording.title, recording.artist.name)
+      );
       sendJson(response, 200, recording);
     } catch {
       sendJson(response, 502, { error: "Global recording lookup unavailable" });
@@ -579,7 +608,7 @@ async function handleRequest(request, response) {
           ? `The recording is categorized as ${recording.genres.join(", ")}.`
           : null
       ].filter(Boolean).join(" ");
-      Object.assign(
+      addSpotifyPopularity(
         recording,
         await resolveSpotifyTrack(recording.title, recording.artist.name)
       );

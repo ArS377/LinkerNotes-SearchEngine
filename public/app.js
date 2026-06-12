@@ -180,6 +180,11 @@ function renderResult(result, { showMatch = true } = {}) {
               ? `<span class="source-badge">${escapeHtml(result.source)}</span>`
               : ""
         }
+        ${
+          Number.isFinite(result.spotifyPopularity)
+            ? `<span class="popularity-badge">Spotify popularity ${result.spotifyPopularity}</span>`
+            : ""
+        }
         <span class="result-title">${title}</span>
         <span class="result-meta">${artist} · ${escapeHtml(result.album)}</span>
       </span>
@@ -402,7 +407,7 @@ async function renderSearch(query, { append = false, offset = 0 } = {}) {
       ? "Global catalog temporarily unavailable; showing local matches."
       : `${body.localCount} enriched locally · ${body.globalCount} global matches`;
     const providerCoverage = body.providerStatus
-      ? ` · MusicBrainz ${body.providerStatus.musicBrainz} · Apple ${body.providerStatus.apple}`
+      ? ` · MusicBrainz ${body.providerStatus.musicBrainz} · Apple ${body.providerStatus.apple} · Spotify ${body.providerStatus.spotify}`
       : "";
     if (!append) {
       resultsSummary.textContent = `${body.results.length} ${
@@ -474,10 +479,40 @@ function renderChartFacts(facts) {
           <span>${escapeHtml(fact.label)}</span>
           <strong>${escapeHtml(fact.value)}</strong>
           <small>${escapeHtml(fact.source)} · ${escapeHtml(fact.asOf)}</small>
+          ${fact.description ? `<p>${escapeHtml(fact.description)}</p>` : ""}
         </div>
       `
     )
     .join("");
+}
+
+function applySpotifyPopularity(song) {
+  if (!Number.isFinite(song.spotifyPopularity)) return song;
+
+  song.chartFacts = [
+    ...(song.chartFacts || []).filter(
+      (fact) => fact.label !== "Spotify popularity"
+    ),
+    {
+      label: "Spotify popularity",
+      value: `${song.spotifyPopularity} / 100`,
+      asOf: new Date().toISOString().slice(0, 10),
+      source: "Spotify",
+      description:
+        "An algorithmic score influenced by total and recent plays; it is not a lifetime stream count."
+    }
+  ];
+  song.sources = [...new Set([...(song.sources || []), "Spotify"])];
+  song.sourceFacts = [
+    ...(song.sourceFacts || []).filter((fact) => fact.source !== "Spotify"),
+    {
+      source: "Spotify",
+      fields: ["track link", "popularity score"],
+      retrievedAt: new Date().toISOString(),
+      confidence: "matched track metadata"
+    }
+  ];
+  return song;
 }
 
 function renderRelated(related) {
@@ -737,6 +772,7 @@ async function renderSong(slug) {
         Object.assign(song, await playbackResponse.json());
       }
     }
+    applySpotifyPopularity(song);
     currentSong = song;
     document.title = `${song.title} by ${song.artist.name} - Liner Notes`;
     songContent.innerHTML = renderSongMarkup(song);

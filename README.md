@@ -41,8 +41,11 @@ unavailable, the others continue to return results.
 
 Copy `.env.example` to `.env` and add credentials as needed.
 
-- Spotify client credentials resolve exact Spotify track URLs. Without them, the
-  interface provides a correctly encoded Spotify search link.
+- Spotify client credentials resolve exact track URLs and add Spotify's 0–100
+  popularity score as a secondary search-ranking signal. Spotify does not expose
+  lifetime stream totals through its public Web API, so the app never labels this
+  score as a stream count. Without credentials, the interface provides a correctly
+  encoded Spotify search link.
 - ACRCloud credentials enable audio-file and humming identification.
 - `MUSICBRAINZ_CONTACT` identifies this application in MusicBrainz API requests.
 

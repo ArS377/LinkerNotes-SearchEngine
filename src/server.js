@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize as normalizePath } from "node:path";
+import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import {
   getArtistProfile,
@@ -14,7 +15,9 @@ import { searchRecordings } from "./search.js";
 import {
   lookupMusicBrainzArtist,
   lookupMusicBrainzArtistMetadata,
-  lookupMusicBrainzRecording
+  lookupMusicBrainzRecording,
+  searchMusicBrainz,
+  searchMusicBrainzArtists
 } from "./providers/musicbrainz.js";
 import {
   lookupAppleArtist,
@@ -39,6 +42,115 @@ const contentTypes = {
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml"
 };
+
+function normalizedText(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+async function enrichArtistContext(recording, artistId) {
+  const artistMetadata = artistId
+    ? await lookupMusicBrainzArtistMetadata(artistId).catch(() => null)
+    : null;
+  if (!artistMetadata) return recording;
+
+  const wikidataUrl = artistMetadata.urls.find(
+    (relation) => relation.type === "wikidata"
+  )?.url;
+  const wikimedia = await lookupWikimediaArtist(wikidataUrl).catch(() => null);
+  const relationUrl = (type, predicate = () => true) =>
+    artistMetadata.urls.find(
+      (relation) => relation.type === type && predicate(relation.url)
+    )?.url || null;
+
+  recording.artist = {
+    ...recording.artist,
+    id: artistMetadata.id,
+    slug: `mbid-${artistMetadata.id}`,
+    country: artistMetadata.country,
+    genres: artistMetadata.genres,
+    summary:
+      wikimedia?.summary
+      || artistMetadata.disambiguation
+      || `${artistMetadata.type} associated with ${artistMetadata.genres.join(", ")}.`,
+    imageUrl: wikimedia?.imageUrl || null,
+    wikipediaUrl: wikimedia?.wikipediaUrl || null,
+    wikidataUrl: wikimedia?.wikidataUrl || wikidataUrl || null,
+    officialUrl: relationUrl("official homepage"),
+    spotifyUrl: relationUrl(
+      "free streaming",
+      (value) => value.startsWith("https://open.spotify.com/artist/")
+    ),
+    lyricsUrl: relationUrl("lyrics")
+  };
+  recording.genres = recording.genres.length
+    ? recording.genres
+    : artistMetadata.genres;
+  recording.lyrics = {
+    ...recording.lyrics,
+    searchUrl: `https://genius.com/search?q=${encodeURIComponent(
+      `${recording.title} ${recording.artist.name}`
+    )}`,
+    artistUrl: recording.artist.lyricsUrl
+  };
+  recording.sources = [
+    ...new Set([
+      ...recording.sources,
+      "MusicBrainz",
+      ...(wikimedia ? [wikimedia.source, "Wikidata"] : [])
+    ])
+  ];
+  recording.sourceFacts.push({
+    source: "MusicBrainz",
+    fields: ["artist identity", "genres", "external relationships"],
+    retrievedAt: new Date().toISOString(),
+    confidence: "canonical artist metadata"
+  });
+  if (wikimedia) {
+    recording.sourceFacts.push({
+      source: wikimedia.source,
+      fields: ["artist biography", "artist image"],
+      retrievedAt: new Date().toISOString(),
+      confidence: "linked from MusicBrainz via Wikidata"
+    });
+  }
+  return recording;
+}
+
+async function findMusicBrainzMatch(title, artist) {
+  const payload = await searchMusicBrainz(`${title} ${artist}`, 10).catch(
+    () => ({ results: [] })
+  );
+  const normalizedTitle = normalizedText(title);
+  const normalizedArtist = normalizedText(artist);
+  return payload.results.find(
+    (candidate) =>
+      normalizedText(candidate.title) === normalizedTitle
+      && normalizedText(candidate.artist) === normalizedArtist
+  ) || payload.results.find(
+    (candidate) =>
+      normalizedText(candidate.title) === normalizedTitle
+      && normalizedText(candidate.artist).includes(normalizedArtist)
+  ) || null;
+}
+
+async function findMusicBrainzArtist(name) {
+  const artists = await searchMusicBrainzArtists(`artist:"${name}"`, 10).catch(
+    () => []
+  );
+  const normalizedName = normalizedText(name);
+  return artists.find(
+    (artist) => normalizedText(artist.name) === normalizedName
+  ) || null;
+}
+
+function localApplePreviewUrl(trackId) {
+  return trackId ? `/api/apple-previews/${encodeURIComponent(trackId)}` : null;
+}
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -176,6 +288,48 @@ async function handleRequest(request, response) {
           : "not-configured"
       }
     });
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/apple-previews/")) {
+    const id = decodeURIComponent(
+      url.pathname.slice("/api/apple-previews/".length)
+    );
+    try {
+      const recording = await lookupAppleTrack(id);
+      if (!recording.previewUrl) {
+        sendJson(response, 404, { error: "Preview unavailable" });
+        return;
+      }
+      const headers = {};
+      if (request.headers.range) headers.range = request.headers.range;
+      const upstream = await fetch(recording.previewUrl, {
+        headers,
+        signal: AbortSignal.timeout(8000)
+      });
+      if (!upstream.ok && upstream.status !== 206) {
+        sendJson(response, 502, { error: "Preview provider unavailable" });
+        return;
+      }
+      const responseHeaders = {
+        "content-type": "audio/mp4",
+        "accept-ranges": upstream.headers.get("accept-ranges") || "bytes",
+        "cache-control": "public, max-age=3600",
+        "x-content-type-options": "nosniff"
+      };
+      for (const name of ["content-length", "content-range", "etag"]) {
+        const value = upstream.headers.get(name);
+        if (value) responseHeaders[name] = value;
+      }
+      response.writeHead(upstream.status, responseHeaders);
+      if (request.method === "HEAD") {
+        response.end();
+        return;
+      }
+      Readable.fromWeb(upstream.body).pipe(response);
+    } catch {
+      sendJson(response, 502, { error: "Preview provider unavailable" });
+    }
     return;
   }
 
@@ -322,50 +476,8 @@ async function handleRequest(request, response) {
     );
     try {
       const recording = await lookupMusicBrainzRecording(id);
-      const artistMetadata = recording.artist.id
-        ? await lookupMusicBrainzArtistMetadata(recording.artist.id).catch(() => null)
-        : null;
-      if (artistMetadata) {
-        const wikidataUrl = artistMetadata.urls.find(
-          (relation) => relation.type === "wikidata"
-        )?.url;
-        const wikimedia = await lookupWikimediaArtist(wikidataUrl).catch(() => null);
-        const lyricsArtistUrl = artistMetadata.urls.find(
-          (relation) => relation.type === "lyrics"
-        )?.url;
-        const officialUrl = artistMetadata.urls.find(
-          (relation) => relation.type === "official homepage"
-        )?.url;
-        const spotifyArtistUrl = artistMetadata.urls.find(
-          (relation) =>
-            relation.url.startsWith("https://open.spotify.com/artist/")
-        )?.url;
-
-        recording.artist = {
-          ...recording.artist,
-          country: artistMetadata.country,
-          genres: artistMetadata.genres,
-          summary:
-            wikimedia?.summary
-            || artistMetadata.disambiguation
-            || `${artistMetadata.type} whose MusicBrainz profile lists ${artistMetadata.genres.join(", ")}.`,
-          imageUrl: wikimedia?.imageUrl || null,
-          wikipediaUrl: wikimedia?.wikipediaUrl || null,
-          wikidataUrl: wikimedia?.wikidataUrl || wikidataUrl || null,
-          officialUrl: officialUrl || null,
-          spotifyUrl: spotifyArtistUrl || null,
-          lyricsUrl: lyricsArtistUrl || null
-        };
-        recording.genres = recording.genres.length
-          ? recording.genres
-          : artistMetadata.genres;
-        recording.lyrics = {
-          ...recording.lyrics,
-          searchUrl: `https://genius.com/search?q=${encodeURIComponent(
-            `${recording.title} ${recording.artist.name}`
-          )}`,
-          artistUrl: lyricsArtistUrl || null
-        };
+      await enrichArtistContext(recording, recording.artist.id);
+      if (recording.artist.id) {
         const releaseDescription = recording.releaseStatus
           ? `${recording.releaseStatus.toLowerCase()} release`
           : "release";
@@ -378,20 +490,6 @@ async function handleRequest(request, response) {
             ? `${recording.artist.name} is associated with ${recording.genres.join(", ")}.`
             : null
         ].filter(Boolean).join(" ");
-        recording.sources = [
-          ...new Set([
-            ...recording.sources,
-            ...(wikimedia ? [wikimedia.source, "Wikidata"] : [])
-          ])
-        ];
-        if (wikimedia) {
-          recording.sourceFacts.push({
-            source: wikimedia.source,
-            fields: ["artist biography", "artist image"],
-            retrievedAt: new Date().toISOString(),
-            confidence: "linked from MusicBrainz via Wikidata"
-          });
-        }
       }
       const coverArt = await lookupCoverArt(
         recording.releaseMusicBrainzId
@@ -426,7 +524,7 @@ async function handleRequest(request, response) {
         Object.assign(recording, {
           appleTrackId: exactApple.appleTrackId,
           appleMusicUrl: exactApple.appleMusicUrl,
-          previewUrl: exactApple.previewUrl,
+          previewUrl: localApplePreviewUrl(exactApple.appleTrackId),
           artworkUrl: recording.artworkUrl || exactApple.artworkUrl,
           isStreamable: exactApple.isStreamable,
           providers: ["MusicBrainz", "Apple Music"]
@@ -456,6 +554,31 @@ async function handleRequest(request, response) {
     const id = decodeURIComponent(url.pathname.slice("/api/apple-songs/".length));
     try {
       const recording = await lookupAppleTrack(id);
+      const musicBrainzMatch = await findMusicBrainzMatch(
+        recording.title,
+        recording.artist.name
+      );
+      const musicBrainzArtist = musicBrainzMatch?.artistMusicBrainzId
+        ? { id: musicBrainzMatch.artistMusicBrainzId }
+        : await findMusicBrainzArtist(recording.artist.name);
+      await enrichArtistContext(
+        recording,
+        musicBrainzArtist?.id
+      );
+      recording.musicBrainzId = musicBrainzMatch?.musicBrainzId || null;
+      recording.musicBrainzUrl = recording.musicBrainzId
+        ? `https://musicbrainz.org/recording/${recording.musicBrainzId}`
+        : null;
+      recording.previewUrl = localApplePreviewUrl(recording.appleTrackId);
+      recording.story = [
+        `“${recording.title}” is a recording by ${recording.artist.name}.`,
+        recording.album !== "Release unknown"
+          ? `Apple Music lists it on “${recording.album}”${recording.releaseDate ? `, released ${recording.releaseDate}` : ""}.`
+          : null,
+        recording.genres.length
+          ? `The recording is categorized as ${recording.genres.join(", ")}.`
+          : null
+      ].filter(Boolean).join(" ");
       Object.assign(
         recording,
         await resolveSpotifyTrack(recording.title, recording.artist.name)
@@ -491,7 +614,7 @@ async function handleRequest(request, response) {
     sendJson(response, 200, {
       ...spotify,
       appleMusicUrl: exactApple?.appleMusicUrl || null,
-      previewUrl: exactApple?.previewUrl || null,
+      previewUrl: localApplePreviewUrl(exactApple?.appleTrackId),
       artworkUrl: exactApple?.artworkUrl || null
     });
     return;

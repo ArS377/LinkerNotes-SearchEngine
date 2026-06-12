@@ -192,7 +192,7 @@ test("external song endpoint builds a global catalog page", async () => {
   assert.equal(body.title, "Remote Song");
   assert.equal(body.external, true);
   assert.equal(body.appleMusicUrl, "https://music.apple.com/track");
-  assert.equal(body.previewUrl, "https://example.com/preview.m4a");
+  assert.equal(body.previewUrl, "/api/apple-previews/1");
   assert.equal(body.artworkUrl, "https://example.com/cover.jpg");
   assert.ok(body.sources.includes("Cover Art Archive"));
   assert.ok(body.sources.includes("Wikipedia"));
@@ -208,6 +208,7 @@ test("Apple song endpoint builds a commercial catalog page", async () => {
   assert.equal(response.status, 200);
   assert.equal(body.title, "Apple Song");
   assert.equal(body.appleMusicUrl, "https://music.apple.com/track");
+  assert.equal(body.previewUrl, "/api/apple-previews/99");
 });
 
 test("local playback endpoint resolves store and preview links", async () => {
@@ -215,7 +216,7 @@ test("local playback endpoint resolves store and preview links", async () => {
   const body = await response.json();
   assert.equal(response.status, 200);
   assert.equal(body.appleMusicUrl, "https://music.apple.com/track");
-  assert.equal(body.previewUrl, "https://example.com/preview.m4a");
+  assert.equal(body.previewUrl, "/api/apple-previews/1");
   assert.match(body.spotifySearchUrl, /open\.spotify\.com\/search/);
 });
 

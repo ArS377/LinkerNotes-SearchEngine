@@ -895,6 +895,13 @@ main {
   height: 42px;
 }
 
+.preview-error {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
 .song-body {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.7fr);

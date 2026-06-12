@@ -631,9 +631,12 @@ function renderSongMarkup(song) {
               <strong>Preview this recording</strong>
               <span>Provided by Apple Music</span>
             </div>
-            <audio controls preload="none" src="${escapeHtml(song.previewUrl)}">
+            <audio controls preload="metadata" src="${escapeHtml(song.previewUrl)}" data-preview-player>
               Your browser does not support audio playback.
             </audio>
+            <p class="preview-error" data-preview-error hidden>
+              This preview is unavailable. Use Apple Music or Spotify above to play the recording.
+            </p>
           </section>`
         : ""
     }
@@ -737,6 +740,11 @@ async function renderSong(slug) {
     currentSong = song;
     document.title = `${song.title} by ${song.artist.name} - Liner Notes`;
     songContent.innerHTML = renderSongMarkup(song);
+    const previewPlayer = songContent.querySelector("[data-preview-player]");
+    previewPlayer?.addEventListener("error", () => {
+      previewPlayer.hidden = true;
+      songContent.querySelector("[data-preview-error]").hidden = false;
+    });
   } catch {
     songContent.innerHTML = `
       <div class="error-state compact-search-wrap">

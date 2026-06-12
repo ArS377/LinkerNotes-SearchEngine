@@ -118,7 +118,10 @@ export async function lookupAppleTrack(id) {
     spotifySearchUrl: spotifySearchUrl(result.title, result.artist),
     lyrics: {
       status: "unavailable",
-      message: "A licensed lyrics provider is required for full lyrics."
+      message: "A licensed lyrics provider is required for full lyrics.",
+      searchUrl: `https://genius.com/search?q=${encodeURIComponent(
+        `${result.title} ${result.artist}`
+      )}`
     },
     story:
       "This track was found in Apple’s commercial music catalog. Editorial context has not been added to the local index yet.",
@@ -142,9 +145,9 @@ export async function lookupAppleTrack(id) {
       id: result.artistAppleId,
       slug: result.artistAppleId ? `apple-${result.artistAppleId}` : null,
       name: result.artist,
-      country: "Country unavailable",
-      summary:
-        "This artist is available through Apple’s global catalog but does not yet have a locally enriched profile.",
+      country: result.country || "Country unavailable",
+      genres: result.genres,
+      summary: `${result.artist} is the credited artist for this ${result.genres[0] || "music"} recording in Apple Music’s catalog.`,
       sources: ["Apple Music"]
     }
   };

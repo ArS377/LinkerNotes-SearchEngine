@@ -4,6 +4,7 @@ import {
   lookupMusicBrainzArtist,
   lookupMusicBrainzArtistMetadata,
   lookupMusicBrainzRecording,
+  searchMusicBrainzArtists,
   searchMusicBrainz,
   setMusicBrainzFetchForTests
 } from "../src/providers/musicbrainz.js";
@@ -32,6 +33,28 @@ test("normalizes MusicBrainz search results", async () => {
   assert.equal(results.results[0].slug, "mbid-1234");
   assert.equal(results.results[0].artist, "Fleetwood Mac");
   assert.equal(results.results[0].duration, "4:17");
+});
+
+test("searches MusicBrainz artists for cross-provider enrichment", async () => {
+  setMusicBrainzFetchForTests(async () => ({
+    ok: true,
+    json: async () => ({
+      artists: [
+        {
+          id: "artist-ken",
+          name: "Ken Carson",
+          "sort-name": "Carson, Ken",
+          country: "US",
+          disambiguation: "US rapper",
+          score: 100
+        }
+      ]
+    })
+  }));
+
+  const artists = await searchMusicBrainzArtists('artist:"Ken Carson"');
+  assert.equal(artists[0].id, "artist-ken");
+  assert.equal(artists[0].name, "Ken Carson");
 });
 
 test("builds an on-demand song page from a MusicBrainz lookup", async () => {

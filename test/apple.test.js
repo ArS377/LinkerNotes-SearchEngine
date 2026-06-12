@@ -20,6 +20,7 @@ const track = {
   releaseDate: "1980-10-08T07:00:00Z",
   trackTimeMillis: 258600,
   primaryGenreName: "Alternative",
+  country: "USA",
   isStreamable: true
 };
 
@@ -46,6 +47,8 @@ test("builds an on-demand page from an Apple track", async () => {
   const recording = await lookupAppleTrack("300948073");
   assert.equal(recording.title, "Once In a Lifetime");
   assert.equal(recording.artist.name, "Talking Heads");
+  assert.match(recording.artist.summary, /alternative recording/i);
+  assert.match(recording.lyrics.searchUrl, /genius\.com\/search/);
   assert.equal(recording.isStreamable, true);
 });
 

@@ -176,6 +176,22 @@ export async function searchMusicBrainz(query, limit = 20, offset = 0) {
   };
 }
 
+export async function searchMusicBrainzArtists(query, limit = 10) {
+  const body = await requestMusicBrainz("artist", {
+    query,
+    limit: String(limit),
+    offset: "0"
+  });
+  return (body.artists || []).map((artist) => ({
+    id: artist.id,
+    name: artist.name,
+    sortName: artist["sort-name"] || artist.name,
+    country: artist.country || artist.area?.name || null,
+    disambiguation: artist.disambiguation || null,
+    score: Number(artist.score || 0)
+  }));
+}
+
 export async function lookupMusicBrainzRecording(id) {
   const recording = await requestMusicBrainz(`recording/${encodeURIComponent(id)}`, {
     inc: "artist-credits+releases+genres+url-rels"

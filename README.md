@@ -3,16 +3,27 @@
 An independent music search engine for finding recordings by title, artist, or
 remembered lyrics, then exploring playback links, credits, versions, and sources.
 
+## Features
+
+- Federated song search across local editorial data, MusicBrainz, and Apple Music.
+- Search suggestions, typo-tolerant matching, result pagination, and lyric fragments.
+- Song pages with lyrics availability, credits, source links, artwork, and previews.
+- Artist profiles and discographies for both local and globally discovered artists.
+- Saved songs and recent searches stored privately in the browser.
+- Optional exact Spotify links and ACRCloud audio or humming identification.
+
 ## Run locally
 
 Requires Node.js 22 or newer.
 
 ```bash
-npm test
 npm start
 ```
 
 Open <http://localhost:3000>.
+
+The app works without a `.env` file. Optional integrations can be configured by
+copying `.env.example` to `.env`.
 
 ## Search coverage
 
@@ -43,6 +54,6 @@ Credentials are used only on the server and are never exposed to browser code.
 npm test
 ```
 
-The suite covers local relevance, provider normalization, federated deduplication,
-provider outages, exact/fallback playback links, audio identification signing,
-HTTP routes, and static asset behavior.
+The suite covers local relevance, provider normalization, artist profiles, search
+suggestions, federated deduplication, provider outages, exact/fallback playback
+links, audio identification signing, HTTP routes, and static asset behavior.

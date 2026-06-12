@@ -369,7 +369,12 @@ export const server = createServer((request, response) => {
 });
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  server.listen(port, () => {
-    console.log(`Liner Notes is listening on http://localhost:${port}`);
+  startServer();
+}
+
+export function startServer(listenPort = port) {
+  server.listen(listenPort, () => {
+    console.log(`Liner Notes is listening on http://localhost:${listenPort}`);
   });
+  return server;
 }

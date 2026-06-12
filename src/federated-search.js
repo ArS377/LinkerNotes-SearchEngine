@@ -30,6 +30,31 @@ function globalRelevance(query, result) {
   return score;
 }
 
+function isTitleIntentMatch(query, result) {
+  const normalizedQuery = normalize(query);
+  const title = normalize(result.title);
+  return title === normalizedQuery || title.startsWith(`${normalizedQuery} `);
+}
+
+function prominenceScore(result) {
+  if (!result.external) return 3000 + Number(result.relevanceScore || 0);
+  if (Number.isFinite(result.spotifyPopularity)) {
+    return 2000 + result.spotifyPopularity;
+  }
+  if (Number.isFinite(result.providerRank)) {
+    return 1000 - result.providerRank;
+  }
+  return Number(result.score || 0);
+}
+
+function queryNamesArtist(query, results) {
+  const normalizedQuery = ` ${normalize(query)} `;
+  return results.some((result) => {
+    const artist = normalize(result.artist);
+    return artist.length >= 3 && normalizedQuery.includes(` ${artist} `);
+  });
+}
+
 function unifiedRelevance(query, result) {
   const textScore = globalRelevance(query, result);
   if (result.external) return textScore;
@@ -54,6 +79,7 @@ function mergeProviderResult(primary, secondary) {
     spotifyUrl: primary.spotifyUrl || secondary.spotifyUrl,
     spotifyPopularity:
       primary.spotifyPopularity ?? secondary.spotifyPopularity ?? null,
+    providerRank: primary.providerRank ?? secondary.providerRank ?? null,
     isrc: primary.isrc || secondary.isrc,
     duration: primary.duration || secondary.duration,
     genres: primary.genres?.length ? primary.genres : secondary.genres
@@ -92,9 +118,13 @@ export async function federatedSearch(
   const musicBrainz = Array.isArray(musicBrainzPayload)
     ? musicBrainzPayload
     : musicBrainzPayload.results;
-  const apple = Array.isArray(applePayload)
+  const appleResults = Array.isArray(applePayload)
     ? applePayload
     : applePayload.results;
+  const apple = appleResults.map((result, index) => ({
+    ...result,
+    providerRank: offset + index
+  }));
   const spotifyPayload = spotifyResponse.status === "fulfilled"
     ? spotifyResponse.value
     : { results: [], configured: true };
@@ -146,9 +176,23 @@ export async function federatedSearch(
         globalRelevance(query, right) - globalRelevance(query, left)
     );
 
-  const results = [...enrichedLocal, ...uniqueRemote]
+  const candidates = [...enrichedLocal, ...uniqueRemote];
+  const hasArtistIntent = queryNamesArtist(query, candidates);
+  const results = candidates
     .sort(
       (left, right) => {
+        if (!hasArtistIntent) {
+          const leftTitleIntent = isTitleIntentMatch(query, left);
+          const rightTitleIntent = isTitleIntentMatch(query, right);
+          if (leftTitleIntent !== rightTitleIntent) {
+            return rightTitleIntent - leftTitleIntent;
+          }
+          if (leftTitleIntent && rightTitleIntent) {
+            const prominenceDifference =
+              prominenceScore(right) - prominenceScore(left);
+            if (prominenceDifference !== 0) return prominenceDifference;
+          }
+        }
         const relevanceDifference =
           unifiedRelevance(query, right) - unifiedRelevance(query, left);
         if (Math.abs(relevanceDifference) >= 100) return relevanceDifference;

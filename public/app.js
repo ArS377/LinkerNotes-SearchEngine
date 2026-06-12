@@ -407,7 +407,7 @@ async function renderSearch(query, { append = false, offset = 0 } = {}) {
       ? "Global catalog temporarily unavailable; showing local matches."
       : `${body.localCount} enriched locally · ${body.globalCount} global matches`;
     const providerCoverage = body.providerStatus
-      ? ` · MusicBrainz ${body.providerStatus.musicBrainz} · Apple ${body.providerStatus.apple} · Spotify ${body.providerStatus.spotify}`
+      ? ` · MusicBrainz ${body.providerStatus.musicBrainz || "unknown"} · Apple ${body.providerStatus.apple || "unknown"} · Spotify ${body.providerStatus.spotify || "not configured"}`
       : "";
     if (!append) {
       resultsSummary.textContent = `${body.results.length} ${

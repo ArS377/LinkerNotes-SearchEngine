@@ -80,6 +80,63 @@ test("reranks an exact title and artist above a high-scoring cover", async () =>
   assert.equal(result.results[0].slug, "mbid-original");
 });
 
+test("uses commercial catalog rank to break ambiguous title collisions", async () => {
+  const result = await federatedSearch("one dance", {
+    musicBrainzSearch: async () => [
+      {
+        slug: "mbid-obscure",
+        title: "One Dance",
+        artist: "Obscure Artist",
+        source: "MusicBrainz",
+        score: 100,
+        external: true
+      }
+    ],
+    appleSearch: async () => [
+      {
+        slug: "apple-drake",
+        title: "One Dance (feat. Wizkid & Kyla)",
+        artist: "Drake",
+        source: "Apple Music",
+        external: true
+      },
+      {
+        slug: "apple-cover",
+        title: "One Dance",
+        artist: "Cover Artist",
+        source: "Apple Music",
+        external: true
+      }
+    ]
+  });
+
+  assert.equal(result.results[0].slug, "apple-drake");
+});
+
+test("an artist-specific match outranks a more prominent title-only match", async () => {
+  const result = await federatedSearch("one dance little big town", {
+    musicBrainzSearch: async () => [],
+    appleSearch: async () => [
+      {
+        slug: "apple-drake",
+        title: "One Dance (feat. Wizkid & Kyla)",
+        artist: "Drake",
+        source: "Apple Music",
+        external: true
+      },
+      {
+        slug: "apple-little-big-town",
+        title: "One Dance",
+        artist: "Little Big Town",
+        source: "Apple Music",
+        external: true
+      }
+    ]
+  });
+
+  assert.equal(result.results[0].slug, "apple-little-big-town");
+});
+
 test("merges Apple playback data into an equivalent MusicBrainz result", async () => {
   const result = await federatedSearch("Dreams Fleetwood Mac", {
     musicBrainzSearch: async () => [

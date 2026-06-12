@@ -1571,13 +1571,3 @@ footer p {
     padding: 28px 24px;
   }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
-
-  .result-card {
-    transition: none;
-  }
-}
